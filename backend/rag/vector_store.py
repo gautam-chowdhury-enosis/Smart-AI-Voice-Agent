@@ -58,6 +58,10 @@ class BaseVectorStore(ABC):
         """Deletes all chunks belonging to a document. Returns count of chunks removed."""
 
     @abstractmethod
+    def delete_by_document_id(self, document_id: str) -> int:
+        """Deletes all chunks belonging to a canonical document UUID. Returns count of chunks removed."""
+
+    @abstractmethod
     def clear(self) -> None:
         """Clears all stored chunks."""
 
@@ -92,6 +96,9 @@ class UnavailableVectorStore(BaseVectorStore):
         raise VectorStoreUnavailableError(self._message)
 
     def delete_by_doc(self, doc_name: str) -> int:
+        raise VectorStoreUnavailableError(self._message)
+
+    def delete_by_document_id(self, document_id: str) -> int:
         raise VectorStoreUnavailableError(self._message)
 
     def clear(self) -> None:
@@ -159,6 +166,48 @@ class MemoryVectorStore(BaseVectorStore):
             added += 1
         return added
 
+    @staticmethod
+    def _matches_metadata_filter(
+        chunk_metadata: dict[str, Any],
+        metadata_filter: dict[str, Any] | None,
+    ) -> bool:
+        """Evaluate nested $and, $or, $in, $eq, and scalar metadata filters."""
+        if not metadata_filter:
+            return True
+
+        if "$and" in metadata_filter and isinstance(metadata_filter["$and"], list):
+            return all(
+                MemoryVectorStore._matches_metadata_filter(chunk_metadata, sub)
+                for sub in metadata_filter["$and"]
+                if isinstance(sub, dict)
+            )
+
+        if "$or" in metadata_filter and isinstance(metadata_filter["$or"], list):
+            return any(
+                MemoryVectorStore._matches_metadata_filter(chunk_metadata, sub)
+                for sub in metadata_filter["$or"]
+                if isinstance(sub, dict)
+            )
+
+        for k, v in metadata_filter.items():
+            if k in ("$and", "$or"):
+                continue
+            chunk_val = chunk_metadata.get(k)
+            if isinstance(v, dict):
+                if "$in" in v:
+                    allowed = v["$in"]
+                    if not isinstance(allowed, (list, tuple, set)) or chunk_val not in allowed:
+                        return False
+                elif "$eq" in v:
+                    if chunk_val != v["$eq"]:
+                        return False
+                elif "$ne" in v:
+                    if chunk_val == v["$ne"]:
+                        return False
+            elif chunk_val != v:
+                return False
+        return True
+
     def search(
         self,
         query: str,
@@ -169,6 +218,18 @@ class MemoryVectorStore(BaseVectorStore):
         if not query_tokens or not self._chunks:
             return []
 
+        # Short-circuit on empty $in filter lists
+        if metadata_filter:
+            for v in metadata_filter.values():
+                if isinstance(v, dict) and "$in" in v and not v["$in"]:
+                    return []
+            if "$and" in metadata_filter and isinstance(metadata_filter["$and"], list):
+                for sub in metadata_filter["$and"]:
+                    if isinstance(sub, dict):
+                        for sub_v in sub.values():
+                            if isinstance(sub_v, dict) and "$in" in sub_v and not sub_v["$in"]:
+                                return []
+
         query_set = set(query_tokens)
         query_vec = self._compute_tfidf_vector(query_tokens)
         total_query_idf = sum(self._compute_tfidf_vector([t]).get(t, 1.0) for t in query_tokens) or 1.0
@@ -177,14 +238,8 @@ class MemoryVectorStore(BaseVectorStore):
 
         for chunk_id, chunk in self._chunks.items():
             # Apply metadata filters
-            if metadata_filter:
-                match = True
-                for k, v in metadata_filter.items():
-                    if chunk.metadata.get(k) != v:
-                        match = False
-                        break
-                if not match:
-                    continue
+            if metadata_filter and not self._matches_metadata_filter(chunk.metadata, metadata_filter):
+                continue
 
             doc_tokens = self._tokenized_docs.get(chunk_id, [])
             doc_set = set(doc_tokens)
@@ -229,6 +284,17 @@ class MemoryVectorStore(BaseVectorStore):
         to_delete = [
             cid for cid, chunk in self._chunks.items()
             if chunk.metadata.get("doc_name") == doc_name
+        ]
+        for cid in to_delete:
+            self._remove_chunk(cid)
+        return len(to_delete)
+
+    def delete_by_document_id(self, document_id: str) -> int:
+        if self._staged_store is not None:
+            return self._staged_store.delete_by_document_id(document_id)
+        to_delete = [
+            cid for cid, chunk in self._chunks.items()
+            if chunk.metadata.get("document_id") == document_id
         ]
         for cid in to_delete:
             self._remove_chunk(cid)
@@ -378,8 +444,21 @@ class ChromaVectorStore(BaseVectorStore):
 
         where_clause = None
         if metadata_filter:
+            # Short-circuit on empty $in filter lists
+            for v in metadata_filter.values():
+                if isinstance(v, dict) and "$in" in v and not v["$in"]:
+                    return []
+            if "$and" in metadata_filter and isinstance(metadata_filter["$and"], list):
+                for sub in metadata_filter["$and"]:
+                    if isinstance(sub, dict):
+                        for sub_v in sub.values():
+                            if isinstance(sub_v, dict) and "$in" in sub_v and not sub_v["$in"]:
+                                return []
+
             # Format ChromaDB where filter
-            if len(metadata_filter) == 1:
+            if "$and" in metadata_filter or "$or" in metadata_filter:
+                where_clause = metadata_filter
+            elif len(metadata_filter) == 1:
                 k, v = next(iter(metadata_filter.items()))
                 where_clause = {k: v}
             elif len(metadata_filter) > 1:
@@ -474,6 +553,20 @@ class ChromaVectorStore(BaseVectorStore):
             return len(ids)
         except Exception as exc:
             raise VectorStoreError("ChromaDB could not delete document chunks.") from exc
+
+    def delete_by_document_id(self, document_id: str) -> int:
+        if not self.is_available:
+            raise VectorStoreUnavailableError("ChromaDB is unavailable; document chunks were not deleted.")
+        try:
+            target = self._active_write_collection()
+            existing = target.get(where={"document_id": document_id})
+            ids = existing.get("ids") or []
+            if not ids:
+                return 0
+            target.delete(ids=ids)
+            return len(ids)
+        except Exception as exc:
+            raise VectorStoreError("ChromaDB could not delete document chunks by ID.") from exc
 
     def clear(self) -> None:
         if self.is_available:

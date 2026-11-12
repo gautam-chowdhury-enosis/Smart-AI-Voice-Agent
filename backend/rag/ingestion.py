@@ -93,6 +93,8 @@ class DocumentIngestionPipeline:
         meta = metadata.copy() if metadata else {}
         doc_name = document_id or path.stem
         meta.setdefault("doc_name", doc_name)
+        if document_id:
+            meta["document_id"] = document_id
         meta.setdefault("file_extension", path.suffix)
 
         if path.suffix.lower() in (".md", ".txt"):
@@ -130,7 +132,10 @@ class DocumentIngestionPipeline:
         """Deletes previous chunks for a document and re-indexes with fresh content."""
         path = Path(file_path)
         doc_name = document_id or path.stem
-        self.vector_store.delete_by_doc(doc_name)
+        if document_id:
+            self.vector_store.delete_by_document_id(document_id)
+        else:
+            self.vector_store.delete_by_doc(doc_name)
         return self.ingest_file(path, metadata=metadata, document_id=doc_name)
 
     def reindex_atomically(
@@ -146,7 +151,10 @@ class DocumentIngestionPipeline:
         try:
             self.vector_store.begin_staged_reindex()
             doc_name = document_id or Path(file_path).stem
-            self.vector_store.delete_by_doc(doc_name)
+            if document_id:
+                self.vector_store.delete_by_document_id(document_id)
+            else:
+                self.vector_store.delete_by_doc(doc_name)
             added = self.ingest_file(file_path, metadata=metadata, document_id=doc_name)
             if added < 1:
                 raise ValueError(f"No readable text was found in document: {file_path}")

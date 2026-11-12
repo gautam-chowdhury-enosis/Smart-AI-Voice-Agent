@@ -20,10 +20,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.rag.chunker import DocumentChunk, VoiceChunker
-from backend.rag.embeddings import DefaultLocalEmbeddingFunction, get_embedding_function
-from backend.rag.ingestion import DocumentIngestionPipeline
-from backend.rag.retriever import (
+from backend.rag.chunker import DocumentChunk, VoiceChunker  # noqa: E402
+from backend.rag.embeddings import DefaultLocalEmbeddingFunction, get_embedding_function  # noqa: E402
+from backend.rag.ingestion import DocumentIngestionPipeline  # noqa: E402
+from backend.rag.retriever import (  # noqa: E402
     FALLBACK_SPOKEN_RESPONSE,
     RAGContextFrameProcessor,
     RAGContextRetriever,
@@ -31,7 +31,7 @@ from backend.rag.retriever import (
     limit_spoken_sentences,
     select_spoken_sentences,
 )
-from backend.rag.vector_store import (
+from backend.rag.vector_store import (  # noqa: E402
     ChromaVectorStore,
     MemoryVectorStore,
     VectorStoreError,
@@ -497,6 +497,111 @@ class TestRAGContextFrameProcessor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(unavailable["status"], "unavailable")
         self.assertIn("search is unavailable", messages[-1]["content"])
         self.assertNotIn("8:00 AM", messages[-1]["content"])
+
+
+class TestVectorStoreUUIDAndFiltering(unittest.TestCase):
+    """Tests for Issue #18: $in metadata filtering, UUID deletion, and document_id propagation."""
+
+    def setUp(self):
+        self.store = MemoryVectorStore()
+        self.chunks = [
+            DocumentChunk(
+                id="c1",
+                text="The swimming pool is open from 6am to 10pm.",
+                metadata={"tenant_id": "grand-meridian", "document_id": "doc-uuid-pool", "doc_name": "pool.md"},
+            ),
+            DocumentChunk(
+                id="c2",
+                text="Breakfast is served in the terrace from 6:30am to 10:30am.",
+                metadata={"tenant_id": "grand-meridian", "document_id": "doc-uuid-dining", "doc_name": "dining.md"},
+            ),
+            DocumentChunk(
+                id="c3",
+                text="Airport shuttle departs every hour on the hour.",
+                metadata={"tenant_id": "grand-meridian", "document_id": "doc-uuid-shuttle", "doc_name": "shuttle.md"},
+            ),
+        ]
+        self.store.add_chunks(self.chunks)
+
+    def test_in_filter_matching(self):
+        """Verify $in operator retrieves only allowed document IDs."""
+        # Querying with only pool doc allowed
+        res_pool = self.store.search(
+            "pool breakfast shuttle",
+            top_k=5,
+            metadata_filter={"document_id": {"$in": ["doc-uuid-pool"]}},
+        )
+        self.assertEqual(len(res_pool), 1)
+        self.assertEqual(res_pool[0].metadata["document_id"], "doc-uuid-pool")
+
+        # Querying with pool and dining allowed
+        res_both = self.store.search(
+            "pool breakfast shuttle",
+            top_k=5,
+            metadata_filter={"document_id": {"$in": ["doc-uuid-pool", "doc-uuid-dining"]}},
+        )
+        doc_ids = {c.metadata["document_id"] for c in res_both}
+        self.assertEqual(doc_ids, {"doc-uuid-pool", "doc-uuid-dining"})
+        self.assertNotIn("doc-uuid-shuttle", doc_ids)
+
+    def test_empty_in_filter_short_circuits(self):
+        """Verify empty $in list immediately returns zero chunks."""
+        res_empty = self.store.search(
+            "swimming pool",
+            top_k=5,
+            metadata_filter={"document_id": {"$in": []}},
+        )
+        self.assertEqual(res_empty, [])
+
+    def test_nested_and_filter(self):
+        """Verify nested $and with $in operator works seamlessly."""
+        filter_clause = {
+            "$and": [
+                {"tenant_id": "grand-meridian"},
+                {"document_id": {"$in": ["doc-uuid-dining"]}},
+            ]
+        }
+        res = self.store.search("breakfast dining", top_k=5, metadata_filter=filter_clause)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0].metadata["document_id"], "doc-uuid-dining")
+
+    def test_delete_by_document_id(self):
+        """Verify delete_by_document_id purges chunks for that specific UUID only."""
+        deleted = self.store.delete_by_document_id("doc-uuid-pool")
+        self.assertEqual(deleted, 1)
+
+        # Pool should now yield 0 results
+        res_pool = self.store.search("swimming pool", metadata_filter={"document_id": {"$in": ["doc-uuid-pool"]}})
+        self.assertEqual(res_pool, [])
+
+        # Dining still exists
+        res_dining = self.store.search("breakfast", metadata_filter={"document_id": {"$in": ["doc-uuid-dining"]}})
+        self.assertEqual(len(res_dining), 1)
+
+    def test_ingestion_pipeline_propagates_document_id(self):
+        """Verify DocumentIngestionPipeline sets document_id in chunk metadata."""
+        pipeline = DocumentIngestionPipeline(vector_store=self.store)
+        with tempfile.NamedTemporaryFile("w+", suffix=".txt", delete=False) as f:
+            f.write("Room service is available 24/7 by calling the front desk.")
+            temp_path = f.name
+
+        try:
+            indexed = pipeline.ingest_file(
+                temp_path,
+                metadata={"tenant_id": "grand-meridian"},
+                document_id="doc-custom-uuid-999",
+            )
+            self.assertGreater(indexed, 0)
+
+            # Query filtering by the custom UUID
+            res = self.store.search(
+                "room service",
+                metadata_filter={"document_id": {"$in": ["doc-custom-uuid-999"]}},
+            )
+            self.assertEqual(len(res), 1)
+            self.assertEqual(res[0].metadata["document_id"], "doc-custom-uuid-999")
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
 
 
 class TestForceMemoryFactory(unittest.TestCase):
