@@ -328,7 +328,7 @@ class KnowledgeStore:
             )
             return cursor.rowcount > 0
 
-    def set_document_status(self, tenant_id: str, document_id: str, is_enabled: bool) -> bool:
+    def set_document_enabled(self, tenant_id: str, document_id: str, is_enabled: bool) -> bool:
         """Soft-toggle document availability for live voice retrieval."""
         now = _utc_now_iso()
         with self.connect() as conn:
@@ -337,6 +337,9 @@ class KnowledgeStore:
                 (1 if is_enabled else 0, now, tenant_id, document_id),
             )
             return cursor.rowcount > 0
+
+    # Backwards-compatible alias for set_document_enabled
+    set_document_status = set_document_enabled
 
     def set_ingestion_status(
         self,
@@ -403,7 +406,7 @@ class KnowledgeStore:
                     )
             return True
 
-    def get_active_doc_ids_for_persona(self, tenant_id: str, persona_key: str) -> list[str]:
+    def resolve_active_document_ids_for_persona(self, tenant_id: str, persona_key: str) -> list[str]:
         """Query currently indexed, enabled document UUIDs visible to this persona."""
         with self.connect() as conn:
             cursor = conn.execute(
@@ -419,6 +422,9 @@ class KnowledgeStore:
                 (persona_key, tenant_id),
             )
             return [row["id"] for row in cursor.fetchall()]
+
+    # Backwards-compatible alias for resolve_active_document_ids_for_persona
+    get_active_doc_ids_for_persona = resolve_active_document_ids_for_persona
 
     # -------------------------------------------------------------------------
     # Persona Knowledge Settings Operations

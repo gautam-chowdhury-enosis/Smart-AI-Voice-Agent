@@ -88,8 +88,8 @@ class TestKnowledgeStore:
         assert doc["assigned_personas"] == ["restaurant_dining"]
 
         # Verify active doc IDs for Marco (restaurant_dining) vs Elena (hotel_booking_specialist)
-        marco_docs = store.get_active_doc_ids_for_persona("grand-meridian", "restaurant_dining")
-        elena_docs = store.get_active_doc_ids_for_persona("grand-meridian", "hotel_booking_specialist")
+        marco_docs = store.resolve_active_document_ids_for_persona("grand-meridian", "restaurant_dining")
+        elena_docs = store.resolve_active_document_ids_for_persona("grand-meridian", "hotel_booking_specialist")
 
         assert doc["id"] in marco_docs
         assert doc["id"] not in elena_docs
@@ -132,19 +132,21 @@ class TestKnowledgeStore:
             safe_filename="Spa_Guide.pdf",
             scope="tenant_wide",
         )
-        assert doc["id"] in store.get_active_doc_ids_for_persona("grand-meridian", "receptionist")
+        assert doc["id"] in store.resolve_active_document_ids_for_persona("grand-meridian", "receptionist")
 
         # Soft disable
-        success = store.set_document_status("grand-meridian", doc["id"], is_enabled=False)
+        success = store.set_document_enabled("grand-meridian", doc["id"], is_enabled=False)
         assert success is True
 
         disabled_doc = store.get_document("grand-meridian", doc["id"])
         assert disabled_doc is not None
         assert disabled_doc["is_enabled"] is False
-        assert doc["id"] not in store.get_active_doc_ids_for_persona("grand-meridian", "receptionist")
+        assert doc["id"] not in store.resolve_active_document_ids_for_persona("grand-meridian", "receptionist")
 
-        # Re-enable
+        # Re-enable using alias to verify backward compatibility
         store.set_document_status("grand-meridian", doc["id"], is_enabled=True)
+        assert doc["id"] in store.resolve_active_document_ids_for_persona("grand-meridian", "receptionist")
+        # Also check alias get_active_doc_ids_for_persona
         assert doc["id"] in store.get_active_doc_ids_for_persona("grand-meridian", "receptionist")
 
     def test_cascading_delete(self, store: KnowledgeStore) -> None:
