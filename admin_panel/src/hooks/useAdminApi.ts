@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminApi } from '../lib/api';
-import type { RuntimeProviderConfig } from '../types/api';
+import type { KnowledgeDocument, KnowledgeDocumentScope, RuntimeProviderConfig } from '../types/api';
 
 const queryKeys = {
   dashboard: ['admin', 'dashboard'] as const,
@@ -53,6 +53,80 @@ export function useUploadKnowledgeDocument() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: adminApi.uploadKnowledgeDocument,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.documents }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
+      ]);
+    },
+  });
+}
+
+export function useUpdateDocumentAssignments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      documentId,
+      scope,
+      assigned_personas,
+    }: {
+      documentId: string;
+      scope: KnowledgeDocumentScope;
+      assigned_personas: string[];
+    }) => adminApi.updateDocumentAssignments(documentId, { scope, assigned_personas }),
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.documents });
+      const previous = queryClient.getQueryData<KnowledgeDocument[]>(queryKeys.documents);
+      queryClient.setQueryData<KnowledgeDocument[] | undefined>(queryKeys.documents, (documents) =>
+        documents?.map((document) =>
+          document.id === variables.documentId
+            ? { ...document, scope: variables.scope, assigned_personas: variables.assigned_personas }
+            : document,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.documents, context.previous);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents });
+    },
+  });
+}
+
+export function useToggleDocumentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, is_enabled }: { documentId: string; is_enabled: boolean }) =>
+      adminApi.toggleDocumentStatus(documentId, { is_enabled }),
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.documents });
+      const previous = queryClient.getQueryData<KnowledgeDocument[]>(queryKeys.documents);
+      queryClient.setQueryData<KnowledgeDocument[] | undefined>(queryKeys.documents, (documents) =>
+        documents?.map((document) =>
+          document.id === variables.documentId ? { ...document, is_enabled: variables.is_enabled } : document,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.documents, context.previous);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents });
+    },
+  });
+}
+
+export function useDeleteKnowledgeDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: string) => adminApi.deleteKnowledgeDocument(documentId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.documents }),

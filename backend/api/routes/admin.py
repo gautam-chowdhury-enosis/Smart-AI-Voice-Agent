@@ -12,6 +12,7 @@ from backend.api.runtime import get_admin_telemetry, get_provider_runtime_store
 from backend.api.schemas import (
     DashboardResponse,
     DocumentAssignmentUpdate,
+    DocumentScope,
     DocumentStatusUpdate,
     KnowledgeDocumentResponse,
     KnowledgeSearchRequest,
@@ -213,17 +214,27 @@ def update_persona_knowledge_settings(
 async def upload_knowledge_document(
     document: UploadFile = File(...),
     tenant_id: str = Form("grand-meridian"),
+    scope: str = Form("tenant_wide"),
+    assigned_personas: list[str] = Form(default_factory=list),
 ) -> KnowledgeDocumentResponse:
     """Upload and stage-index a tenant document, bounded to a safe local size."""
     content = await document.read(MAX_DOCUMENT_BYTES + 1)
     if len(content) > MAX_DOCUMENT_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Documents must be 10 MB or smaller.")
+
+    try:
+        normalized_scope = DocumentScope(scope)
+    except ValueError as exc:
+        raise _bad_request(f"Unsupported document scope '{scope}'.") from exc
+
     try:
         return await run_in_threadpool(
             get_knowledge_hub().save_and_index,
             tenant_id,
             document.filename or "document.txt",
             content,
+            scope=normalized_scope,
+            assigned_personas=assigned_personas,
         )
     except ValueError as exc:
         raise _bad_request(str(exc)) from exc
