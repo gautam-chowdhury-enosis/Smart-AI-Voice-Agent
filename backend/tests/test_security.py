@@ -86,18 +86,19 @@ class TestAdminAuthentication(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 503)
 
-    def test_cors_preflight_allows_authorization_header(self) -> None:
-        """The admin browser can send its bearer key through CORS preflight."""
+    def test_cors_preflight_allows_authorization_and_delete(self) -> None:
+        """The admin browser can send its bearer key and delete documents through CORS."""
         response = self.client.options(
             "/api/v1/admin/dashboard",
             headers={
                 "Origin": "http://localhost:5173",
-                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Method": "DELETE",
                 "Access-Control-Request-Headers": "authorization",
             },
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("authorization", response.headers["access-control-allow-headers"].lower())
+        self.assertIn("DELETE", response.headers["access-control-allow-methods"])
 
 
 class TestVoiceSignallingRateLimit(unittest.IsolatedAsyncioTestCase):
