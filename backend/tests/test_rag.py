@@ -363,7 +363,8 @@ class TestRAGContextRetriever(unittest.TestCase):
             ),
         ])
         ctx = retriever.query_with_context("What time is check-in and check-out?")
-        self.assertIn("<knowledge_base>", ctx["context_prompt"])
+        self.assertIn("<verified_reference_documents>", ctx["context_prompt"])
+        self.assertIn("</verified_reference_documents>", ctx["context_prompt"])
         self.assertLessEqual(len(ctx["chunks"]), 2)
         self.assertNotIn("Pets are welcome downstairs", ctx["context_prompt"])
 
