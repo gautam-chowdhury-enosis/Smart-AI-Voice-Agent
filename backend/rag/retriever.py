@@ -496,12 +496,16 @@ class RAGContextFrameProcessor(FrameProcessor):
                     elif result.get("status") == "matched" and self.connection is not None:
                         if hasattr(self.connection, "send_app_message"):
                             for chunk in result.get("chunks", []):
+                                citation = {
+                                    "document_id": str(chunk.metadata.get("document_id", chunk.id)),
+                                    "document_name": str(chunk.metadata.get("doc_name", "Knowledge Document")),
+                                    "excerpt": chunk.text[:250] if chunk.text else "",
+                                    "relevance_score": round(float(chunk.score), 4),
+                                }
                                 self.connection.send_app_message({
                                     "type": "knowledge_citation",
-                                    "document_id": chunk.metadata.get("document_id", chunk.id),
-                                    "document_name": chunk.metadata.get("doc_name", "knowledge"),
-                                    "excerpt": chunk.text[:200] if chunk.text else "",
-                                    "relevance_score": round(float(chunk.score), 4),
+                                    "citation": citation,
+                                    **citation,
                                 })
 
         await self.push_frame(frame, direction)
