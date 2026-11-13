@@ -11,9 +11,13 @@ from backend.api.knowledge import MAX_DOCUMENT_BYTES, get_knowledge_hub
 from backend.api.runtime import get_admin_telemetry, get_provider_runtime_store
 from backend.api.schemas import (
     DashboardResponse,
+    DocumentAssignmentUpdate,
+    DocumentStatusUpdate,
     KnowledgeDocumentResponse,
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
+    PersonaKnowledgeSettingsResponse,
+    PersonaKnowledgeSettingsUpdate,
     ProviderSettingsResponse,
     ProviderSettingsUpdate,
     ServiceHealth,
@@ -130,6 +134,79 @@ def list_knowledge_documents(tenant_id: str = "grand-meridian") -> list[Knowledg
         return get_knowledge_hub().list_documents(tenant_id)
     except ValueError as exc:
         raise _bad_request(str(exc)) from exc
+
+
+@router.get("/knowledge/documents/{document_id}", response_model=KnowledgeDocumentResponse)
+def get_knowledge_document(document_id: str, tenant_id: str = "grand-meridian") -> KnowledgeDocumentResponse:
+    """Fetch a single stored knowledge document for a tenant."""
+    try:
+        return get_knowledge_hub().get_document(tenant_id, document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.patch("/knowledge/documents/{document_id}/assignments", response_model=KnowledgeDocumentResponse)
+@router.put("/knowledge/documents/{document_id}/assignments", response_model=KnowledgeDocumentResponse)
+@router.patch("/knowledge/documents/{document_id}/assignment", response_model=KnowledgeDocumentResponse)
+def update_knowledge_document_assignments(
+    document_id: str,
+    payload: DocumentAssignmentUpdate,
+    tenant_id: str = "grand-meridian",
+) -> KnowledgeDocumentResponse:
+    """Assign or unassign a document to one or more voice personas."""
+    try:
+        return get_knowledge_hub().update_document_assignments(
+            tenant_id,
+            document_id,
+            payload.scope,
+            payload.assigned_personas,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.patch("/knowledge/documents/{document_id}/status", response_model=KnowledgeDocumentResponse)
+@router.put("/knowledge/documents/{document_id}/status", response_model=KnowledgeDocumentResponse)
+@router.patch("/knowledge/documents/{document_id}/toggle", response_model=KnowledgeDocumentResponse)
+@router.put("/knowledge/documents/{document_id}/toggle", response_model=KnowledgeDocumentResponse)
+def update_knowledge_document_status(
+    document_id: str,
+    payload: DocumentStatusUpdate,
+    tenant_id: str = "grand-meridian",
+) -> KnowledgeDocumentResponse:
+    """Soft-enable or disable a document for live retrieval."""
+    try:
+        return get_knowledge_hub().set_document_enabled(tenant_id, document_id, payload.is_enabled)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/knowledge/documents/{document_id}")
+def delete_knowledge_document(document_id: str, tenant_id: str = "grand-meridian") -> dict[str, bool]:
+    """Permanently delete a document and its vector chunks for a tenant."""
+    deleted = get_knowledge_hub().delete_document(tenant_id, document_id)
+    return {"deleted": deleted}
+
+
+@router.get("/knowledge/personas/{persona_key}/settings", response_model=PersonaKnowledgeSettingsResponse)
+def get_persona_knowledge_settings(
+    persona_key: str,
+    tenant_id: str = "grand-meridian",
+) -> PersonaKnowledgeSettingsResponse:
+    """Return the grounding policy and tuning thresholds for one persona."""
+    return get_knowledge_hub().get_persona_settings(tenant_id, persona_key)
+
+
+@router.patch("/knowledge/personas/{persona_key}/settings", response_model=PersonaKnowledgeSettingsResponse)
+@router.put("/knowledge/personas/{persona_key}/settings", response_model=PersonaKnowledgeSettingsResponse)
+@router.post("/knowledge/personas/{persona_key}/settings", response_model=PersonaKnowledgeSettingsResponse)
+def update_persona_knowledge_settings(
+    persona_key: str,
+    payload: PersonaKnowledgeSettingsUpdate,
+    tenant_id: str = "grand-meridian",
+) -> PersonaKnowledgeSettingsResponse:
+    """Update the grounding strategy and retrieval thresholds for one persona."""
+    return get_knowledge_hub().update_persona_settings(tenant_id, persona_key, payload)
 
 
 @router.post("/knowledge/upload", response_model=KnowledgeDocumentResponse)

@@ -90,3 +90,40 @@ class TestAdminAPI(unittest.TestCase):
 
             self.assertEqual(response.status_code, 503)
             self.assertIn("ChromaDB query failed", response.json()["detail"])
+
+    def test_admin_document_assignment_and_persona_settings_routes(self) -> None:
+        """The admin API exposes CRUD-style routes for document persona assignment and grounding settings."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+            settings = AppSettings(admin_api_key="dev-admin-key")
+            service = KnowledgeHubService(settings, data_dir=Path(temp_dir) / "knowledge")
+            document = service.save_and_index(
+                "grand-meridian",
+                "policy.md",
+                b"Check-in begins at 3 PM.",
+            )
+
+            with patch("backend.api.routes.admin.get_knowledge_hub", return_value=service):
+                client = TestClient(create_app())
+                client.app.dependency_overrides[get_settings] = lambda: settings
+                headers = {"Authorization": f"Bearer {settings.admin_api_key}"}
+
+                details = client.get(f"/api/v1/admin/knowledge/documents/{document.id}", headers=headers)
+                self.assertEqual(details.status_code, 200)
+                self.assertEqual(details.json()["name"], "policy.md")
+
+                assignment = client.patch(
+                    f"/api/v1/admin/knowledge/documents/{document.id}/assignments?tenant_id=grand-meridian",
+                    json={"scope": "persona_specific", "assigned_personas": ["hotel_booking_specialist"]},
+                    headers=headers,
+                )
+                self.assertEqual(assignment.status_code, 200)
+                self.assertIn("hotel_booking_specialist", assignment.json()["assigned_personas"])
+
+                settings_response = client.put(
+                    "/api/v1/admin/knowledge/personas/hotel_booking_specialist/settings?tenant_id=grand-meridian",
+                    json={"grounding_mode": "knowledge_strict", "min_relevance_score": 0.75, "max_chunks_per_turn": 2},
+                    headers=headers,
+                )
+                self.assertEqual(settings_response.status_code, 200)
+                self.assertEqual(settings_response.json()["grounding_mode"], "knowledge_strict")
+                self.assertEqual(settings_response.json()["max_chunks_per_turn"], 2)

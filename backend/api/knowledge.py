@@ -30,6 +30,7 @@ from backend.rag.vector_store import (
     BaseVectorStore,
     MemoryVectorStore,
     UnavailableVectorStore,
+    VectorStoreError,
     VectorStoreUnavailableError,
     get_vector_store,
 )
@@ -635,6 +636,11 @@ class KnowledgeHubService:
             min_score = 0.20 if is_memory_store else 0.0
 
         result = retriever.query_with_context(query, metadata_filter=metadata_filter)
+        if result.get("status") == "unavailable":
+            try:
+                durable_store.search(query, top_k=top_k, metadata_filter=metadata_filter)
+            except VectorStoreError as exc:
+                raise exc
         chunks: list[KnowledgeChunkResponse] = []
         for chunk in result["chunks"]:
             clamped_score = round(max(0.0, min(1.0, float(chunk.score))), 4)
