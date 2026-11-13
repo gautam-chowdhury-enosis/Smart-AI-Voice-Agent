@@ -94,6 +94,18 @@ export interface PersonaVoiceUpdateResponse {
   role_fit: string[];
 }
 
+export type GroundingMode = 'knowledge_strict' | 'prompt_only' | 'hybrid_balanced' | 'knowledge_first';
+
+export interface PersonaKnowledgeSettings {
+  tenant_id: string;
+  persona_key: string;
+  grounding_mode: GroundingMode;
+  min_relevance_score: number;
+  max_chunks_per_turn: number;
+  custom_fallback_spoken: string | null;
+  updated_at: string | null;
+}
+
 export interface KnowledgeSearchChunk {
   source: string;
   excerpt: string;

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminApi } from '../lib/api';
-import type { KnowledgeDocument, KnowledgeDocumentScope, RuntimeProviderConfig } from '../types/api';
+import type { GroundingMode, KnowledgeDocument, KnowledgeDocumentScope, PersonaKnowledgeSettings, RuntimeProviderConfig } from '../types/api';
 
 const queryKeys = {
   dashboard: ['admin', 'dashboard'] as const,
@@ -138,7 +138,57 @@ export function useDeleteKnowledgeDocument() {
 
 /** Executes an explicit knowledge search test when an operator submits it. */
 export function useKnowledgeSearch() {
-  return useMutation({ mutationFn: adminApi.searchKnowledge });
+  return useMutation({
+    mutationFn: ({ query, persona_key }: { query: string; persona_key?: string }) => adminApi.searchKnowledge(query, persona_key),
+  });
+}
+
+export function usePersonaKnowledgeSettings(personaKey: string) {
+  return useQuery({
+    queryKey: ['admin', 'persona-settings', personaKey] as const,
+    queryFn: () => adminApi.getPersonaKnowledgeSettings(personaKey),
+    enabled: !!personaKey,
+  });
+}
+
+export function useUpdatePersonaKnowledgeSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      personaKey,
+      payload,
+    }: {
+      personaKey: string;
+      payload: {
+        grounding_mode: GroundingMode;
+        min_relevance_score: number;
+        max_chunks_per_turn: number;
+        custom_fallback_spoken?: string | null;
+      };
+    }) => adminApi.updatePersonaKnowledgeSettings(personaKey, payload),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'persona-settings', variables.personaKey] });
+    },
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['admin', 'persona-settings', variables.personaKey] });
+      const previous = queryClient.getQueryData<PersonaKnowledgeSettings>(['admin', 'persona-settings', variables.personaKey]);
+      if (previous) {
+        queryClient.setQueryData<PersonaKnowledgeSettings>(['admin', 'persona-settings', variables.personaKey], {
+          ...previous,
+          grounding_mode: variables.payload.grounding_mode,
+          min_relevance_score: variables.payload.min_relevance_score,
+          max_chunks_per_turn: variables.payload.max_chunks_per_turn,
+          custom_fallback_spoken: variables.payload.custom_fallback_spoken ?? previous.custom_fallback_spoken,
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['admin', 'persona-settings', variables.personaKey], context.previous);
+      }
+    },
+  });
 }
 
 /** Synthesizes an audio preview for the selected Voice Studio profile. */

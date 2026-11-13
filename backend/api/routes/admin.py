@@ -246,7 +246,7 @@ async def upload_knowledge_document(
 def search_knowledge(payload: KnowledgeSearchRequest) -> KnowledgeSearchResponse:
     """Test tenant-scoped retrieval using the same spoken-brevity guardrails as calls."""
     try:
-        return get_knowledge_hub().search(payload.tenant_id, payload.query)
+        return get_knowledge_hub().search(payload.tenant_id, payload.query, persona_key=payload.persona_key)
     except ValueError as exc:
         raise _bad_request(str(exc)) from exc
     except VectorStoreError as exc:

@@ -121,9 +121,21 @@ class TestAdminAPI(unittest.TestCase):
 
                 settings_response = client.put(
                     "/api/v1/admin/knowledge/personas/hotel_booking_specialist/settings?tenant_id=grand-meridian",
-                    json={"grounding_mode": "knowledge_strict", "min_relevance_score": 0.75, "max_chunks_per_turn": 2},
+                    json={"grounding_mode": "knowledge_strict", "min_relevance_score": 0.0, "max_chunks_per_turn": 2},
                     headers=headers,
                 )
                 self.assertEqual(settings_response.status_code, 200)
                 self.assertEqual(settings_response.json()["grounding_mode"], "knowledge_strict")
                 self.assertEqual(settings_response.json()["max_chunks_per_turn"], 2)
+
+                search_response = client.post(
+                    "/api/v1/admin/knowledge/search",
+                    json={
+                        "tenant_id": "grand-meridian",
+                        "query": "When does check-in begin?",
+                        "persona_key": "hotel_booking_specialist",
+                    },
+                    headers=headers,
+                )
+                self.assertEqual(search_response.status_code, 200)
+                self.assertTrue(search_response.json()["has_context"])

@@ -1,6 +1,7 @@
-import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { CheckCircle2, FileSearch, FileUp, Files, PencilLine, Search, Trash2, UploadCloud } from 'lucide-react';
 
+import { KnowledgeMatrix } from '../components/KnowledgeMatrix';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -8,8 +9,10 @@ import {
   useDeleteKnowledgeDocument,
   useKnowledgeDocuments,
   useKnowledgeSearch,
+  usePersonaKnowledgeSettings,
   useToggleDocumentStatus,
   useUpdateDocumentAssignments,
+  useUpdatePersonaKnowledgeSettings,
   useUploadKnowledgeDocument,
 } from '../hooks/useAdminApi';
 import { formatDateTime } from '../lib/utils';
@@ -32,6 +35,7 @@ export function KnowledgeHub() {
   const toggleStatus = useToggleDocumentStatus();
   const deleteDocument = useDeleteKnowledgeDocument();
   const search = useKnowledgeSearch();
+  const updatePersonaSettings = useUpdatePersonaKnowledgeSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -41,7 +45,31 @@ export function KnowledgeHub() {
   const [editingDocument, setEditingDocument] = useState<KnowledgeDocument | null>(null);
   const [draftScope, setDraftScope] = useState<KnowledgeDocumentScope>('tenant_wide');
   const [draftPersonas, setDraftPersonas] = useState<string[]>([]);
+  const [selectedPersonaKey, setSelectedPersonaKey] = useState<string>('all');
   const [query, setQuery] = useState('What time are check-in and check-out?');
+  const [policyDraft, setPolicyDraft] = useState<{
+    grounding_mode: 'knowledge_strict' | 'prompt_only' | 'hybrid_balanced' | 'knowledge_first';
+    min_relevance_score: number;
+    max_chunks_per_turn: number;
+    custom_fallback_spoken: string;
+  }>({
+    grounding_mode: 'hybrid_balanced',
+    min_relevance_score: 0.65,
+    max_chunks_per_turn: 3,
+    custom_fallback_spoken: '',
+  });
+  const activePersonaKey = selectedPersonaKey === 'all' ? 'hotel_booking_specialist' : selectedPersonaKey;
+  const personaSettings = usePersonaKnowledgeSettings(activePersonaKey);
+
+  useEffect(() => {
+    if (!personaSettings.data) return;
+    setPolicyDraft({
+      grounding_mode: personaSettings.data.grounding_mode,
+      min_relevance_score: personaSettings.data.min_relevance_score,
+      max_chunks_per_turn: personaSettings.data.max_chunks_per_turn,
+      custom_fallback_spoken: personaSettings.data.custom_fallback_spoken ?? '',
+    });
+  }, [personaSettings.data]);
 
   const chooseFile = (file: File | undefined) => {
     if (!file) return;
@@ -118,7 +146,37 @@ export function KnowledgeHub() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0]);
   const handleSearch = (event: FormEvent) => {
     event.preventDefault();
-    if (query.trim().length >= 2) search.mutate(query.trim());
+    if (query.trim().length >= 2) {
+      search.mutate({
+        query: query.trim(),
+        persona_key: selectedPersonaKey === 'all' ? undefined : selectedPersonaKey,
+      });
+    }
+  };
+
+  const handleMatrixToggle = (documentId: string, personaKey: string, nextValue: boolean) => {
+    const targetDocument = documents.data?.find((document) => document.id === documentId);
+    if (!targetDocument) return;
+    const nextAssignments = nextValue
+      ? [...new Set([...(targetDocument.assigned_personas ?? []), personaKey])]
+      : (targetDocument.assigned_personas ?? []).filter((key) => key !== personaKey);
+    updateAssignments.mutate({
+      documentId,
+      scope: nextAssignments.length > 0 ? 'persona_specific' : 'persona_specific',
+      assigned_personas: nextAssignments,
+    });
+  };
+
+  const savePersonaSettings = () => {
+    updatePersonaSettings.mutate({
+      personaKey: activePersonaKey,
+      payload: {
+        grounding_mode: policyDraft.grounding_mode,
+        min_relevance_score: Number(policyDraft.min_relevance_score.toFixed(2)),
+        max_chunks_per_turn: policyDraft.max_chunks_per_turn,
+        custom_fallback_spoken: policyDraft.custom_fallback_spoken.trim() || null,
+      },
+    });
   };
 
   return (
@@ -234,6 +292,7 @@ export function KnowledgeHub() {
             )}
           </Card>
           <DocumentList />
+          {documents.data && <KnowledgeMatrix documents={documents.data} onToggleAssignment={handleMatrixToggle} />}
         </div>
         <Card className="p-5 sm:p-7">
           <div className="flex items-start justify-between gap-4">
@@ -259,9 +318,25 @@ export function KnowledgeHub() {
                 </Button>
               </div>
             </label>
+            <label className="mt-4 block">
+              <span className="field-label">Simulate as voice agent</span>
+              <select
+                value={selectedPersonaKey}
+                onChange={(event) => setSelectedPersonaKey(event.target.value)}
+                className="field mt-2"
+              >
+                <option value="all">All Knowledge (Unrestricted)</option>
+                {PERSONA_OPTIONS.map(({ key, name }) => (
+                  <option key={key} value={key}>{name}</option>
+                ))}
+              </select>
+            </label>
           </form>
           <div className="mt-7 border-t border-slate-800 pt-6">
             <SearchResults />
+          </div>
+          <div className="mt-7 border-t border-slate-800 pt-6">
+            <GroundingPolicyPanel />
           </div>
         </Card>
       </div>
@@ -445,6 +520,8 @@ export function KnowledgeHub() {
   }
 
   function SearchResults() {
+    const activePersonaName = selectedPersonaKey === 'all' ? 'All knowledge' : PERSONA_OPTIONS.find((option) => option.key === selectedPersonaKey)?.name ?? 'Selected persona';
+
     if (search.isIdle)
       return (
         <div className="flex min-h-72 flex-col items-center justify-center text-center">
@@ -462,32 +539,127 @@ export function KnowledgeHub() {
           {search.error instanceof Error ? search.error.message : 'Search failed.'}
         </p>
       );
-    if (!search.data?.has_context)
-      return (
-        <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] p-5">
-          <Badge tone="warning">No matching context</Badge>
-          <p className="mt-4 text-sm font-medium text-amber-100">Spoken fallback</p>
-          <p className="mt-2 text-sm leading-6 text-amber-100/75">“{search.data?.fallback_spoken}”</p>
-        </div>
-      );
     return (
       <div>
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-emerald-300">
-            {search.data.chunks.length} relevant source{search.data.chunks.length === 1 ? '' : 's'}
-          </p>
-          <Badge tone="success">Voice-safe</Badge>
+        {selectedPersonaKey !== 'all' && (
+          <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-xs font-medium text-indigo-100">
+            Testing retrieval through {activePersonaName}'s scope
+          </div>
+        )}
+        {!search.data?.has_context ? (
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] p-5">
+            <Badge tone="warning">No matching context</Badge>
+            <p className="mt-4 text-sm font-medium text-amber-100">Spoken fallback</p>
+            <p className="mt-2 text-sm leading-6 text-amber-100/75">“{search.data?.fallback_spoken}”</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-emerald-300">
+                {search.data.chunks.length} relevant source{search.data.chunks.length === 1 ? '' : 's'}
+              </p>
+              <Badge tone="success">Voice-safe</Badge>
+            </div>
+            <div className="mt-4 space-y-3">
+              {search.data.chunks.map((chunk, index) => (
+                <article key={`${chunk.source}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-200">{chunk.source}</p>
+                    <span className="text-xs font-medium text-indigo-300">{Math.round(chunk.score * 100)}% match</span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{chunk.excerpt}</p>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function GroundingPolicyPanel() {
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="section-title text-lg">Grounding policy</h3>
+            <p className="section-copy">Persona-specific retrieval behavior</p>
+          </div>
+          <Badge tone="accent">{PERSONA_OPTIONS.find((option) => option.key === activePersonaKey)?.name ?? 'Elena'}</Badge>
         </div>
-        <div className="mt-4 space-y-3">
-          {search.data.chunks.map((chunk, index) => (
-            <article key={`${chunk.source}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-200">{chunk.source}</p>
-                <span className="text-xs font-medium text-indigo-300">{Math.round(chunk.score * 100)}% match</span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-400">{chunk.excerpt}</p>
-            </article>
-          ))}
+
+        <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            {[
+              { value: 'knowledge_strict', label: 'Strict Knowledge Only' },
+              { value: 'prompt_only', label: 'Prompt Only (No RAG)' },
+              { value: 'hybrid_balanced', label: 'Hybrid Balanced' },
+              { value: 'knowledge_first', label: 'Knowledge First' },
+            ].map((option) => (
+              <label key={option.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm text-slate-200">
+                <input
+                  type="radio"
+                  name="grounding-mode"
+                  checked={policyDraft.grounding_mode === option.value}
+                  onChange={() => setPolicyDraft((current) => ({ ...current, grounding_mode: option.value as typeof current.grounding_mode }))}
+                  className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          <label className="block">
+            <span className="field-label">Minimum relevance threshold</span>
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min={0.5}
+                max={0.9}
+                step={0.05}
+                value={policyDraft.min_relevance_score}
+                onChange={(event) =>
+                  setPolicyDraft((current) => ({ ...current, min_relevance_score: Number(event.target.value) }))
+                }
+                className="h-2 w-full accent-indigo-500"
+              />
+              <span className="min-w-12 text-right text-xs font-medium text-slate-300">
+                {policyDraft.min_relevance_score.toFixed(2)}
+              </span>
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="field-label">Max chunks per turn</span>
+            <select
+              value={policyDraft.max_chunks_per_turn}
+              onChange={(event) =>
+                setPolicyDraft((current) => ({ ...current, max_chunks_per_turn: Number(event.target.value) }))
+              }
+              className="field mt-2"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+              <option value={4}>4</option>
+              <option value={5}>5</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="field-label">Custom spoken fallback</span>
+            <textarea
+              value={policyDraft.custom_fallback_spoken}
+              onChange={(event) => setPolicyDraft((current) => ({ ...current, custom_fallback_spoken: event.target.value }))}
+              rows={3}
+              className="field mt-2 resize-none"
+              placeholder="Override the default fallback spoken message for this persona."
+            />
+          </label>
+
+          <Button onClick={savePersonaSettings} disabled={personaSettings.isPending || updatePersonaSettings.isPending}>
+            {updatePersonaSettings.isPending ? 'Saving…' : 'Save policy'}
+          </Button>
         </div>
       </div>
     );

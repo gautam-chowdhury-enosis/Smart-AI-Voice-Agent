@@ -240,6 +240,7 @@ class KnowledgeSearchRequest(StrictSchema):
 
     query: str = Field(min_length=2, max_length=500)
     tenant_id: str = Field(default="grand-meridian", min_length=1, max_length=64)
+    persona_key: str | None = None
 
 
 class KnowledgeSearchResponse(StrictSchema):
