@@ -53,12 +53,47 @@ class TestConfiguration(unittest.TestCase):
 
         persona = tenant.get_active_persona()
         self.assertEqual(persona.name, "Elena")
-        self.assertEqual(persona.voice.provider, "cartesia")
-        self.assertEqual(persona.voice.voice_id, "86e30c1d-714b-4074-a1f2-1cb6b552fb49")
+        self.assertEqual(persona.voice.provider, "kokoro")
+        self.assertEqual(persona.voice.voice_id, "af_sarah")
         self.assertEqual(persona.voice.speed, 1.00)
-        self.assertEqual(persona.llm.provider, "groq")
-        self.assertEqual(persona.llm.model, "openai/gpt-oss-120b")
+        self.assertEqual(persona.llm.provider, "ollama")
+        self.assertEqual(persona.llm.model, "llama3.2:3b")
         self.assertIn("hotel_check_availability", persona.tools)
+
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_default_hotel_services_initialize_with_zero_cloud_keys(
+        self, mock_kokoro_service, mock_openai_service
+    ):
+        """Validates default hotel persona services can be instantiated with zero cloud keys."""
+        mock_openai_service.return_value = MagicMock()
+        mock_kokoro_service.return_value = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "pipecat.services.openai.llm": MagicMock(OpenAILLMService=mock_openai_service),
+                "pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service),
+            },
+        ):
+            tenant = load_tenant_config("default_hotel.yaml")
+            persona = tenant.get_active_persona()
+            settings = AppSettings(_env_file=None)
+
+            llm_service = create_llm_service(settings, override=persona.llm)
+            tts_service = create_tts_service(settings, override=persona.voice)
+
+            self.assertIsNotNone(llm_service)
+            self.assertIsNotNone(tts_service)
+            mock_openai_service.assert_called_once_with(
+                api_key="ollama",
+                base_url=settings.ollama_base_url,
+                model="llama3.2:3b",
+            )
+            mock_kokoro_service.assert_called_once_with(
+                voice_id="af_sarah",
+                speed=1.00,
+            )
 
 
 class TestLLMFactory(unittest.TestCase):
