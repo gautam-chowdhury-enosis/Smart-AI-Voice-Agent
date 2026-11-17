@@ -94,6 +94,11 @@ export interface PersonaVoiceUpdateResponse {
   role_fit: string[];
 }
 
+export interface PersonaOption {
+  key: string;
+  name: string;
+}
+
 export type GroundingMode = 'knowledge_strict' | 'prompt_only' | 'hybrid_balanced' | 'knowledge_first';
 
 export interface PersonaKnowledgeSettings {

@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
+  useAvailablePersonas,
   useDeleteKnowledgeDocument,
   useKnowledgeDocuments,
   useKnowledgeSearch,
@@ -23,15 +24,10 @@ import { SearchResults } from './knowledge/components/SearchResults';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ['.pdf', '.md', '.txt'];
-const PERSONA_OPTIONS = [
-  { key: 'hotel_booking_specialist', name: 'Elena' },
-  { key: 'restaurant_dining', name: 'Marco' },
-  { key: 'travel_desk', name: 'Priya' },
-  { key: 'customer_care', name: 'Jordan' },
-] as const;
 
 /** Tenant-scoped upload and retrieval testing workspace for operational knowledge. */
 export function KnowledgeHub() {
+  const personaOptions = useAvailablePersonas();
   const documents = useKnowledgeDocuments();
   const upload = useUploadKnowledgeDocument();
   const updateAssignments = useUpdateDocumentAssignments();
@@ -47,6 +43,7 @@ export function KnowledgeHub() {
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [editingDocument, setEditingDocument] = useState<KnowledgeDocument | null>(null);
   const [deletingDocument, setDeletingDocument] = useState<{ id: string; name: string } | null>(null);
+  const [orphanConfirmDoc, setOrphanConfirmDoc] = useState<{ documentId: string; documentName: string } | null>(null);
   const [selectedPersonaKey, setSelectedPersonaKey] = useState<string>('all');
   const [query, setQuery] = useState('What time are check-in and check-out?');
   const [policyDraft, setPolicyDraft] = useState<GroundingPolicyDraft>({
@@ -146,17 +143,58 @@ export function KnowledgeHub() {
     }
   };
 
+  const applyMatrixAssignment = (
+    documentId: string,
+    nextAssignments: string[],
+    allPersonaKeys: string[],
+  ) => {
+    const nextScope: KnowledgeDocumentScope =
+      nextAssignments.length >= allPersonaKeys.length ? 'tenant_wide' : 'persona_specific';
+
+    updateAssignments.mutate({
+      documentId,
+      scope: nextScope,
+      assigned_personas: nextScope === 'tenant_wide' ? [] : nextAssignments,
+    });
+  };
+
   const handleMatrixToggle = (documentId: string, personaKey: string, nextValue: boolean) => {
     const targetDocument = documents.data?.find((document) => document.id === documentId);
     if (!targetDocument) return;
+
+    const allPersonaKeys = personaOptions.map((persona) => persona.key);
+    const currentAssigned =
+      targetDocument.scope === 'tenant_wide'
+        ? allPersonaKeys
+        : (targetDocument.assigned_personas ?? []);
+
     const nextAssignments = nextValue
-      ? [...new Set([...(targetDocument.assigned_personas ?? []), personaKey])]
-      : (targetDocument.assigned_personas ?? []).filter((key) => key !== personaKey);
-    updateAssignments.mutate({
-      documentId,
-      scope: nextAssignments.length > 0 ? 'persona_specific' : 'persona_specific',
-      assigned_personas: nextAssignments,
-    });
+      ? [...new Set([...currentAssigned, personaKey])]
+      : currentAssigned.filter((key) => key !== personaKey);
+
+    if (nextAssignments.length === 0) {
+      setOrphanConfirmDoc({
+        documentId,
+        documentName: targetDocument.name,
+      });
+      return;
+    }
+
+    applyMatrixAssignment(documentId, nextAssignments, allPersonaKeys);
+  };
+
+  const confirmOrphanAssignment = () => {
+    if (!orphanConfirmDoc) return;
+    updateAssignments.mutate(
+      {
+        documentId: orphanConfirmDoc.documentId,
+        scope: 'persona_specific',
+        assigned_personas: [],
+      },
+      {
+        onSettled: () => setOrphanConfirmDoc(null),
+      },
+    );
   };
 
   const savePersonaSettings = () => {
@@ -253,7 +291,7 @@ export function KnowledgeHub() {
 
                   {accessScope === 'persona_specific' && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {PERSONA_OPTIONS.map(({ key, name }) => {
+                      {personaOptions.map(({ key, name }) => {
                         const isSelected = selectedPersonas.includes(key);
                         return (
                           <button
@@ -298,9 +336,15 @@ export function KnowledgeHub() {
             }
             onManageAccess={openAccessDrawer}
             onDeleteDocument={handleDeleteDocument}
-            personaOptions={PERSONA_OPTIONS}
+            personaOptions={personaOptions}
           />
-          {documents.data && <KnowledgeMatrix documents={documents.data} onToggleAssignment={handleMatrixToggle} />}
+          {documents.data && (
+            <KnowledgeMatrix
+              documents={documents.data}
+              personas={personaOptions}
+              onToggleAssignment={handleMatrixToggle}
+            />
+          )}
         </div>
         <Card className="p-5 sm:p-7">
           <div className="flex items-start justify-between gap-4">
@@ -334,7 +378,7 @@ export function KnowledgeHub() {
                 className="field mt-2"
               >
                 <option value="all">All Knowledge (Unrestricted)</option>
-                {PERSONA_OPTIONS.map(({ key, name }) => (
+                {personaOptions.map(({ key, name }) => (
                   <option key={key} value={key}>{name}</option>
                 ))}
               </select>
@@ -344,7 +388,7 @@ export function KnowledgeHub() {
             <SearchResults
               search={search}
               selectedPersonaKey={selectedPersonaKey}
-              personaOptions={PERSONA_OPTIONS}
+              personaOptions={personaOptions}
             />
           </div>
           <div className="mt-7 border-t border-slate-800 pt-6">
@@ -355,7 +399,7 @@ export function KnowledgeHub() {
               onSavePolicy={savePersonaSettings}
               isSaving={updatePersonaSettings.isPending}
               isLoading={personaSettings.isPending}
-              personaOptions={PERSONA_OPTIONS}
+              personaOptions={personaOptions}
             />
           </div>
         </Card>
@@ -366,7 +410,7 @@ export function KnowledgeHub() {
         onClose={() => setEditingDocument(null)}
         onSave={saveAccessChanges}
         isSaving={updateAssignments.isPending}
-        personaOptions={PERSONA_OPTIONS}
+        personaOptions={personaOptions}
       />
 
       <ConfirmDialog
@@ -386,6 +430,18 @@ export function KnowledgeHub() {
           }
         }}
         onCancel={() => setDeletingDocument(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(orphanConfirmDoc)}
+        title="Make document inaccessible to all agents?"
+        description={`Unchecking all personas will make "${orphanConfirmDoc?.documentName}" inaccessible to all voice agents during calls. The document will remain indexed, but no voice agent will retrieve from it.`}
+        confirmText="Remove Access"
+        cancelText="Cancel"
+        isDestructive={false}
+        isPending={updateAssignments.isPending}
+        onConfirm={confirmOrphanAssignment}
+        onCancel={() => setOrphanConfirmDoc(null)}
       />
     </div>
   );

@@ -254,3 +254,20 @@ export function useUpdatePersonaKnowledgeSettings() {
 export function useVoiceAudition() {
   return useMutation({ mutationFn: adminApi.auditionVoice });
 }
+
+export interface PersonaOption {
+  key: string;
+  name: string;
+}
+
+export const CANONICAL_PERSONAS: readonly PersonaOption[] = [
+  { key: "hotel_booking_specialist", name: "Elena" },
+  { key: "restaurant_dining", name: "Marco" },
+  { key: "travel_desk", name: "Priya" },
+  { key: "customer_care", name: "Jordan" },
+] as const;
+
+/** Canonical hook exposing tenant voice personas across knowledge and matrix components. */
+export function useAvailablePersonas(): readonly PersonaOption[] {
+  return CANONICAL_PERSONAS;
+}
