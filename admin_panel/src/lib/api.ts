@@ -5,8 +5,6 @@ import type {
   KnowledgeDocumentScope,
   KnowledgeSearchResult,
   PersonaKnowledgeSettings,
-  PersonaVoiceUpdate,
-  PersonaVoiceUpdateResponse,
   ProviderSettingsResponse,
   RuntimeProviderConfig,
   VoiceProfile,
@@ -93,14 +91,6 @@ export const adminApi = {
       body: JSON.stringify(payload),
     }),
   getVoices: (): Promise<VoiceProfile[]> => request("/api/v1/admin/voices"),
-  updatePersonaVoice: (
-    personaKey: string,
-    payload: PersonaVoiceUpdate,
-  ): Promise<PersonaVoiceUpdateResponse> =>
-    request(`/api/v1/admin/personas/${encodeURIComponent(personaKey)}/voice`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
   getKnowledgeDocuments: (): Promise<KnowledgeDocument[]> =>
     request("/api/v1/admin/knowledge/documents"),
   uploadKnowledgeDocument: (
