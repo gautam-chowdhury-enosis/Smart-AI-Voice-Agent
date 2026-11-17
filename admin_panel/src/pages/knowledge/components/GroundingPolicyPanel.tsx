@@ -89,6 +89,8 @@ export function GroundingPolicyPanel({
               max={0.9}
               step={0.05}
               value={policyDraft.min_relevance_score}
+              aria-label="Minimum relevance score threshold"
+              aria-valuetext={`${(policyDraft.min_relevance_score * 100).toFixed(0)} percent`}
               onChange={(event) =>
                 onChangePolicy((current) => ({
                   ...current,
@@ -107,6 +109,7 @@ export function GroundingPolicyPanel({
           <span className="field-label">Max chunks per turn</span>
           <select
             value={policyDraft.max_chunks_per_turn}
+            aria-label="Max chunks per turn"
             onChange={(event) =>
               onChangePolicy((current) => ({
                 ...current,
@@ -127,6 +130,7 @@ export function GroundingPolicyPanel({
           <span className="field-label">Custom spoken fallback</span>
           <textarea
             value={policyDraft.custom_fallback_spoken}
+            aria-label="Custom spoken fallback message"
             onChange={(event) =>
               onChangePolicy((current) => ({
                 ...current,

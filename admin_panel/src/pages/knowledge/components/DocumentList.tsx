@@ -95,7 +95,7 @@ export function DocumentList({
                       type="button"
                       role="switch"
                       aria-checked={document.is_enabled}
-                      aria-label={`Toggle status for ${document.name}`}
+                      aria-label={`Toggle active status for ${document.name}`}
                       onClick={() => onToggleStatus(document.id, !document.is_enabled)}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                         document.is_enabled ? 'bg-indigo-500' : 'bg-slate-700'
@@ -108,11 +108,16 @@ export function DocumentList({
                       />
                     </button>
                   </label>
-                  <Button variant="secondary" onClick={() => onManageAccess(document)}>
+                  <Button
+                    variant="secondary"
+                    aria-label={`Manage access for ${document.name}`}
+                    onClick={() => onManageAccess(document)}
+                  >
                     <PencilLine className="h-4 w-4" />Manage Access
                   </Button>
                   <Button
                     variant="ghost"
+                    aria-label={`Delete ${document.name}`}
                     className="border border-slate-800 bg-slate-900/60 text-rose-200 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-100"
                     onClick={() => onDeleteDocument(document.id, document.name)}
                   >

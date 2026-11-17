@@ -58,7 +58,7 @@ export function SearchResults({
   }
 
   return (
-    <div>
+    <div aria-live="polite" aria-atomic="true">
       {selectedPersonaKey !== 'all' && (
         <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-xs font-medium text-indigo-100">
           Testing retrieval through {activePersonaName}&apos;s scope

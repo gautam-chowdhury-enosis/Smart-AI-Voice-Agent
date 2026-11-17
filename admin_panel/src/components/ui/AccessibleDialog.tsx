@@ -63,8 +63,17 @@ export function AccessibleDialog({
     return () => {
       clearTimeout(focusTimer);
       document.body.style.overflow = originalOverflow;
-      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+      if (
+        previousActiveElementRef.current &&
+        document.body.contains(previousActiveElementRef.current) &&
+        typeof previousActiveElementRef.current.focus === 'function'
+      ) {
         previousActiveElementRef.current.focus();
+      } else {
+        const fallbackTarget = document.querySelector<HTMLElement>('main, h1, h2, [tabindex="0"]');
+        if (fallbackTarget && typeof fallbackTarget.focus === 'function') {
+          fallbackTarget.focus();
+        }
       }
     };
   }, [isOpen, initialFocusRef]);
