@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { CheckCircle2, FileSearch, FileUp, Files, PencilLine, Search, Trash2, UploadCloud } from 'lucide-react';
+import { CheckCircle2, FileSearch, FileUp, Search, UploadCloud } from 'lucide-react';
 
 import { KnowledgeMatrix } from '../components/KnowledgeMatrix';
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
   useDeleteKnowledgeDocument,
   useKnowledgeDocuments,
@@ -15,8 +15,11 @@ import {
   useUpdatePersonaKnowledgeSettings,
   useUploadKnowledgeDocument,
 } from '../hooks/useAdminApi';
-import { formatDateTime } from '../lib/utils';
 import type { KnowledgeDocument, KnowledgeDocumentScope } from '../types/api';
+import { DocumentAccessModal } from './knowledge/components/DocumentAccessModal';
+import { DocumentList } from './knowledge/components/DocumentList';
+import { GroundingPolicyPanel, type GroundingPolicyDraft } from './knowledge/components/GroundingPolicyPanel';
+import { SearchResults } from './knowledge/components/SearchResults';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ['.pdf', '.md', '.txt'];
@@ -43,16 +46,10 @@ export function KnowledgeHub() {
   const [accessScope, setAccessScope] = useState<KnowledgeDocumentScope>('tenant_wide');
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [editingDocument, setEditingDocument] = useState<KnowledgeDocument | null>(null);
-  const [draftScope, setDraftScope] = useState<KnowledgeDocumentScope>('tenant_wide');
-  const [draftPersonas, setDraftPersonas] = useState<string[]>([]);
+  const [deletingDocument, setDeletingDocument] = useState<{ id: string; name: string } | null>(null);
   const [selectedPersonaKey, setSelectedPersonaKey] = useState<string>('all');
   const [query, setQuery] = useState('What time are check-in and check-out?');
-  const [policyDraft, setPolicyDraft] = useState<{
-    grounding_mode: 'knowledge_strict' | 'prompt_only' | 'hybrid_balanced' | 'knowledge_first';
-    min_relevance_score: number;
-    max_chunks_per_turn: number;
-    custom_fallback_spoken: string;
-  }>({
+  const [policyDraft, setPolicyDraft] = useState<GroundingPolicyDraft>({
     grounding_mode: 'hybrid_balanced',
     min_relevance_score: 0.65,
     max_chunks_per_turn: 3,
@@ -116,25 +113,20 @@ export function KnowledgeHub() {
 
   const openAccessDrawer = (document: KnowledgeDocument) => {
     setEditingDocument(document);
-    setDraftScope(document.scope);
-    setDraftPersonas(document.assigned_personas ?? []);
   };
 
-  const saveAccessChanges = () => {
-    if (!editingDocument) return;
+  const saveAccessChanges = (
+    documentId: string,
+    scope: KnowledgeDocumentScope,
+    assignedPersonas: string[],
+  ) => {
     updateAssignments.mutate(
       {
-        documentId: editingDocument.id,
-        scope: draftScope,
-        assigned_personas: draftScope === 'persona_specific' ? draftPersonas : [],
+        documentId,
+        scope,
+        assigned_personas: assignedPersonas,
       },
       { onSuccess: () => setEditingDocument(null) },
-    );
-  };
-
-  const toggleDraftPersona = (personaKey: string) => {
-    setDraftPersonas((current) =>
-      current.includes(personaKey) ? current.filter((key) => key !== personaKey) : [...current, personaKey],
     );
   };
 
@@ -177,6 +169,10 @@ export function KnowledgeHub() {
         custom_fallback_spoken: policyDraft.custom_fallback_spoken.trim() || null,
       },
     });
+  };
+
+  const handleDeleteDocument = (documentId: string, documentName: string) => {
+    setDeletingDocument({ id: documentId, name: documentName });
   };
 
   return (
@@ -291,7 +287,19 @@ export function KnowledgeHub() {
               </p>
             )}
           </Card>
-          <DocumentList />
+          <DocumentList
+            documents={documents.data}
+            isLoading={documents.isLoading}
+            isError={documents.isError}
+            errorMessage={documents.error instanceof Error ? documents.error.message : undefined}
+            onRefetch={() => void documents.refetch()}
+            onToggleStatus={(documentId, nextStatus) =>
+              toggleStatus.mutate({ documentId, is_enabled: nextStatus })
+            }
+            onManageAccess={openAccessDrawer}
+            onDeleteDocument={handleDeleteDocument}
+            personaOptions={PERSONA_OPTIONS}
+          />
           {documents.data && <KnowledgeMatrix documents={documents.data} onToggleAssignment={handleMatrixToggle} />}
         </div>
         <Card className="p-5 sm:p-7">
@@ -333,335 +341,52 @@ export function KnowledgeHub() {
             </label>
           </form>
           <div className="mt-7 border-t border-slate-800 pt-6">
-            <SearchResults />
+            <SearchResults
+              search={search}
+              selectedPersonaKey={selectedPersonaKey}
+              personaOptions={PERSONA_OPTIONS}
+            />
           </div>
           <div className="mt-7 border-t border-slate-800 pt-6">
-            <GroundingPolicyPanel />
+            <GroundingPolicyPanel
+              activePersonaKey={activePersonaKey}
+              policyDraft={policyDraft}
+              onChangePolicy={setPolicyDraft}
+              onSavePolicy={savePersonaSettings}
+              isSaving={updatePersonaSettings.isPending}
+              isLoading={personaSettings.isPending}
+              personaOptions={PERSONA_OPTIONS}
+            />
           </div>
         </Card>
       </div>
-      {editingDocument && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-slate-950/70">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">Document access</p>
-                <h3 className="mt-1 text-lg font-semibold text-white">{editingDocument.name}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingDocument(null)}
-                className="rounded-full border border-slate-700 p-2 text-slate-300 hover:border-slate-500 hover:text-white"
-                aria-label="Close access drawer"
-              >
-                ×
-              </button>
-            </div>
+      <DocumentAccessModal
+        document={editingDocument}
+        isOpen={Boolean(editingDocument)}
+        onClose={() => setEditingDocument(null)}
+        onSave={saveAccessChanges}
+        isSaving={updateAssignments.isPending}
+        personaOptions={PERSONA_OPTIONS}
+      />
 
-            <div className="mt-5 space-y-2">
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-2.5 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="document-access-drawer"
-                  checked={draftScope === 'tenant_wide'}
-                  onChange={() => setDraftScope('tenant_wide')}
-                  className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500"
-                />
-                🌐 All Voice Personas
-              </label>
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-2.5 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="document-access-drawer"
-                  checked={draftScope === 'persona_specific'}
-                  onChange={() => setDraftScope('persona_specific')}
-                  className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500"
-                />
-                🎯 Specific Personas
-              </label>
-            </div>
-
-            {draftScope === 'persona_specific' && (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {PERSONA_OPTIONS.map(({ key, name }) => {
-                  const selected = draftPersonas.includes(key);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => toggleDraftPersona(key)}
-                      className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition ${
-                        selected
-                          ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-100'
-                          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
-                      }`}
-                    >
-                      {selected ? '☑' : '☐'} {name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setEditingDocument(null)}>
-                Cancel
-              </Button>
-              <Button onClick={saveAccessChanges} disabled={updateAssignments.isPending}>
-                {updateAssignments.isPending ? 'Saving…' : 'Save access'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={Boolean(deletingDocument)}
+        title={`Delete ${deletingDocument?.name ?? 'document'}?`}
+        description="This will permanently delete this document and remove its extracted vector chunks from ChromaDB. Personas will no longer be grounded on this document."
+        confirmText="Delete Document"
+        cancelText="Cancel"
+        isDestructive={true}
+        isPending={deleteDocument.isPending}
+        onConfirm={() => {
+          if (deletingDocument) {
+            deleteDocument.mutate(deletingDocument.id, {
+              onSuccess: () => setDeletingDocument(null),
+              onError: () => setDeletingDocument(null),
+            });
+          }
+        }}
+        onCancel={() => setDeletingDocument(null)}
+      />
     </div>
   );
-
-  function DocumentList() {
-    if (documents.isLoading) return <Card className="p-6"><div className="h-20 animate-pulse rounded-xl bg-slate-800" /></Card>;
-    if (documents.isError)
-      return (
-        <Card className="p-6">
-          <p className="text-sm text-rose-200">{documents.error instanceof Error ? documents.error.message : 'Document status is unavailable.'}</p>
-          <Button variant="secondary" className="mt-4" onClick={() => void documents.refetch()}>
-            Try again
-          </Button>
-        </Card>
-      );
-
-    return (
-      <Card className="p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="section-title">Indexed documents</h2>
-            <p className="section-copy">Active for this tenant</p>
-          </div>
-          <Badge tone="neutral">{documents.data?.length ?? 0}</Badge>
-        </div>
-
-        {documents.data?.length ? (
-          <ul className="mt-5 space-y-3">
-            {documents.data.map((document) => (
-              <li key={document.id ?? `${document.name}-${document.uploaded_at}`} className="rounded-xl border border-slate-800 bg-slate-950/35 p-3">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-slate-100">{document.name}</p>
-                      <Badge tone={document.is_enabled ? 'success' : 'neutral'}>{document.is_enabled ? 'Active' : 'Disabled'}</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {document.chunks_indexed} chunks · {formatDateTime(document.uploaded_at)} · version {document.version}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-2 py-1.5 text-xs font-medium text-slate-200">
-                      <span>{document.is_enabled ? 'Enabled' : 'Disabled'}</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={document.is_enabled}
-                        onClick={() => toggleStatus.mutate({ documentId: document.id, is_enabled: !document.is_enabled })}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                          document.is_enabled ? 'bg-indigo-500' : 'bg-slate-700'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 rounded-full bg-white transition ${
-                            document.is_enabled ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </label>
-                    <Button variant="secondary" onClick={() => openAccessDrawer(document)}>
-                      <PencilLine className="h-4 w-4" />Manage Access
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="border border-slate-800 bg-slate-900/60 text-rose-200 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-100"
-                      onClick={() => {
-                        if (window.confirm(`Delete ${document.name}? This will remove the uploaded knowledge and its vector chunks.`)) {
-                          deleteDocument.mutate(document.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />Delete
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {document.scope === 'tenant_wide' ? (
-                    <Badge tone="neutral">All Personas</Badge>
-                  ) : document.assigned_personas.length ? (
-                    document.assigned_personas.map((personaKey) => {
-                      const persona = PERSONA_OPTIONS.find((option) => option.key === personaKey);
-                      return (
-                        <Badge key={`${document.id}-${personaKey}`} tone="primary">
-                          {persona?.name ?? personaKey}
-                        </Badge>
-                      );
-                    })
-                  ) : (
-                    <Badge tone="warning">No persona access</Badge>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-5 text-center">
-            <Files className="mx-auto h-5 w-5 text-slate-600" />
-            <p className="mt-2 text-sm text-slate-500">No uploaded documents yet.</p>
-          </div>
-        )}
-      </Card>
-    );
-  }
-
-  function SearchResults() {
-    const activePersonaName = selectedPersonaKey === 'all' ? 'All knowledge' : PERSONA_OPTIONS.find((option) => option.key === selectedPersonaKey)?.name ?? 'Selected persona';
-
-    if (search.isIdle)
-      return (
-        <div className="flex min-h-72 flex-col items-center justify-center text-center">
-          <Search className="h-7 w-7 text-slate-600" />
-          <p className="mt-3 text-sm font-medium text-slate-300">Run a retrieval test</p>
-          <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
-            Results will show the source chunks available to the voice agent, limited by the same spoken-brevity policy.
-          </p>
-        </div>
-      );
-    if (search.isPending) return <div className="min-h-72 animate-pulse rounded-xl bg-slate-900/60" />;
-    if (search.isError)
-      return (
-        <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm leading-6 text-rose-100">
-          {search.error instanceof Error ? search.error.message : 'Search failed.'}
-        </p>
-      );
-    return (
-      <div>
-        {selectedPersonaKey !== 'all' && (
-          <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-xs font-medium text-indigo-100">
-            Testing retrieval through {activePersonaName}'s scope
-          </div>
-        )}
-        {!search.data?.has_context ? (
-          <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] p-5">
-            <Badge tone="warning">No matching context</Badge>
-            <p className="mt-4 text-sm font-medium text-amber-100">Spoken fallback</p>
-            <p className="mt-2 text-sm leading-6 text-amber-100/75">“{search.data?.fallback_spoken}”</p>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-emerald-300">
-                {search.data.chunks.length} relevant source{search.data.chunks.length === 1 ? '' : 's'}
-              </p>
-              <Badge tone="success">Voice-safe</Badge>
-            </div>
-            <div className="mt-4 space-y-3">
-              {search.data.chunks.map((chunk, index) => (
-                <article key={`${chunk.source}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-200">{chunk.source}</p>
-                    <span className="text-xs font-medium text-indigo-300">{Math.round(chunk.score * 100)}% match</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">{chunk.excerpt}</p>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  function GroundingPolicyPanel() {
-    return (
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="section-title text-lg">Grounding policy</h3>
-            <p className="section-copy">Persona-specific retrieval behavior</p>
-          </div>
-          <Badge tone="accent">{PERSONA_OPTIONS.find((option) => option.key === activePersonaKey)?.name ?? 'Elena'}</Badge>
-        </div>
-
-        <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            {[
-              { value: 'knowledge_strict', label: 'Strict Knowledge Only' },
-              { value: 'prompt_only', label: 'Prompt Only (No RAG)' },
-              { value: 'hybrid_balanced', label: 'Hybrid Balanced' },
-              { value: 'knowledge_first', label: 'Knowledge First' },
-            ].map((option) => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="grounding-mode"
-                  checked={policyDraft.grounding_mode === option.value}
-                  onChange={() => setPolicyDraft((current) => ({ ...current, grounding_mode: option.value as typeof current.grounding_mode }))}
-                  className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500"
-                />
-                {option.label}
-              </label>
-            ))}
-          </div>
-
-          <label className="block">
-            <span className="field-label">Minimum relevance threshold</span>
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="range"
-                min={0.5}
-                max={0.9}
-                step={0.05}
-                value={policyDraft.min_relevance_score}
-                onChange={(event) =>
-                  setPolicyDraft((current) => ({ ...current, min_relevance_score: Number(event.target.value) }))
-                }
-                className="h-2 w-full accent-indigo-500"
-              />
-              <span className="min-w-12 text-right text-xs font-medium text-slate-300">
-                {policyDraft.min_relevance_score.toFixed(2)}
-              </span>
-            </div>
-          </label>
-
-          <label className="block">
-            <span className="field-label">Max chunks per turn</span>
-            <select
-              value={policyDraft.max_chunks_per_turn}
-              onChange={(event) =>
-                setPolicyDraft((current) => ({ ...current, max_chunks_per_turn: Number(event.target.value) }))
-              }
-              className="field mt-2"
-            >
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-              <option value={4}>4</option>
-              <option value={5}>5</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="field-label">Custom spoken fallback</span>
-            <textarea
-              value={policyDraft.custom_fallback_spoken}
-              onChange={(event) => setPolicyDraft((current) => ({ ...current, custom_fallback_spoken: event.target.value }))}
-              rows={3}
-              className="field mt-2 resize-none"
-              placeholder="Override the default fallback spoken message for this persona."
-            />
-          </label>
-
-          <Button onClick={savePersonaSettings} disabled={personaSettings.isPending || updatePersonaSettings.isPending}>
-            {updatePersonaSettings.isPending ? 'Saving…' : 'Save policy'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
 }

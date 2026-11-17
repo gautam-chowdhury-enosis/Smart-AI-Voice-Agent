@@ -116,7 +116,7 @@ export function useUpdateDocumentAssignments() {
         queryClient.setQueryData(queryKeys.documents, context.previous);
       }
     },
-    onSuccess: async () => {
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.documents });
     },
   });
@@ -153,7 +153,7 @@ export function useToggleDocumentStatus() {
         queryClient.setQueryData(queryKeys.documents, context.previous);
       }
     },
-    onSuccess: async () => {
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.documents });
     },
   });
