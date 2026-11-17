@@ -39,6 +39,25 @@ def create_llm_service(
     selected = override or runtime_override
     provider: LLMProviderType = selected.provider if selected else app_cfg.llm_provider
 
+    # Graceful fallback to local provider if cloud credentials are missing
+    if provider in ("groq", "openai", "gemini"):
+        api_key_map = {
+            "groq": ("GROQ_API_KEY", override.api_key if override and override.api_key else app_cfg.groq_api_key),
+            "openai": ("OPENAI_API_KEY", override.api_key if override and override.api_key else app_cfg.openai_api_key),
+            "gemini": ("GEMINI_API_KEY", override.api_key if override and override.api_key else app_cfg.gemini_api_key),
+        }
+        env_var_name, key = api_key_map[provider]
+        if not key:
+            target_provider = app_cfg.llm_provider if app_cfg.llm_provider != provider else "ollama"
+            logger.warning(
+                "%s is missing for persona '%s'. Falling back to default provider '%s'.",
+                env_var_name,
+                getattr(override, "model", "default"),
+                target_provider,
+            )
+            provider = target_provider
+            selected = None
+
     if provider == "ollama":
         try:
             from pipecat.services.openai.llm import OpenAILLMService

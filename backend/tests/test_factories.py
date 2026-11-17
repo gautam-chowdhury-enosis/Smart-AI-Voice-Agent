@@ -64,29 +64,59 @@ class TestConfiguration(unittest.TestCase):
 class TestLLMFactory(unittest.TestCase):
     """Tests for LLM Service Factory."""
 
-    def test_missing_groq_api_key_raises_error(self):
-        """Requesting Groq without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, groq_api_key=None)
-        override = LLMSettings(provider="groq")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("GROQ_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_groq_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting Groq without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
 
-    def test_missing_openai_api_key_raises_error(self):
-        """Requesting OpenAI without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, openai_api_key=None)
-        override = LLMSettings(provider="openai")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("OPENAI_API_KEY is required", str(ctx.exception))
+        settings = AppSettings(_env_file=None, groq_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="groq", model="openai/gpt-oss-120b")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("GROQ_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
 
-    def test_missing_gemini_api_key_raises_error(self):
-        """Requesting Gemini without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, gemini_api_key=None)
-        override = LLMSettings(provider="gemini")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("GEMINI_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_openai_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting OpenAI without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
+
+        settings = AppSettings(_env_file=None, openai_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="openai", model="gpt-4o-mini")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("OPENAI_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
+
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_gemini_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting Gemini without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
+
+        settings = AppSettings(_env_file=None, gemini_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="gemini", model="gemini-2.0-flash")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("GEMINI_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
 
     def test_unsupported_provider_raises_error(self):
         """Requesting an invalid provider must raise UnsupportedProviderError."""
