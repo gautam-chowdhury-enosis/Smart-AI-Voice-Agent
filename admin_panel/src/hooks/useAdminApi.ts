@@ -53,11 +53,20 @@ export function useVoices() {
   return useQuery({ queryKey: queryKeys.voices, queryFn: adminApi.getVoices });
 }
 
-/** Loads the document status list for the Grand Meridian tenant. */
+/** Loads the document status list for the Grand Meridian tenant with adaptive in-flight polling. */
 export function useKnowledgeDocuments() {
   return useQuery({
     queryKey: queryKeys.documents,
     queryFn: adminApi.getKnowledgeDocuments,
+    refetchInterval: (query) => {
+      const hasInFlight = query.state.data?.some(
+        (doc) =>
+          doc.ingestion_status === "pending" ||
+          doc.ingestion_status === "indexing" ||
+          doc.ingestion_status === "deleting",
+      );
+      return hasInFlight ? 2500 : false;
+    },
   });
 }
 
