@@ -25,6 +25,37 @@ def create_tts_service(
     app_cfg = settings or get_settings()
     provider: TTSProviderType = (override.provider if override else app_cfg.tts_provider)
 
+    # Graceful fallback to local provider if cloud credentials are missing
+    if provider in ("cartesia", "elevenlabs"):
+        api_key_map = {
+            "cartesia": ("CARTESIA_API_KEY", app_cfg.cartesia_api_key),
+            "elevenlabs": ("ELEVENLABS_API_KEY", getattr(app_cfg, "elevenlabs_api_key", None)),
+        }
+        env_var_name, key = api_key_map[provider]
+        if not key:
+            target_provider = app_cfg.tts_provider if app_cfg.tts_provider != provider else "kokoro"
+            logger.warning(
+                "%s is missing. Falling back to default TTS provider '%s'.",
+                env_var_name,
+                target_provider,
+            )
+            provider = target_provider
+            if target_provider == "kokoro":
+                fallback_voice = getattr(override, "fallback_voice_id", None) or app_cfg.kokoro_voice_id
+                from backend.engine.audio.voice_catalog import KOKORO_VOICES
+                if fallback_voice not in KOKORO_VOICES:
+                    fallback_voice = app_cfg.kokoro_voice_id
+                override = VoiceSettings(
+                    provider="kokoro",
+                    voice_id=fallback_voice,
+                    speed=override.speed if override else app_cfg.kokoro_speed,
+                )
+            elif target_provider == "piper":
+                override = VoiceSettings(
+                    provider="piper",
+                    voice_id="en_US-lessac-medium",
+                )
+
     if provider == "kokoro":
         raw_voice_id = override.voice_id if override else app_cfg.kokoro_voice_id
         profile = get_voice_profile(raw_voice_id, provider="kokoro")

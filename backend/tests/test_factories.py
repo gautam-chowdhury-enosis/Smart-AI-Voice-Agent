@@ -199,13 +199,50 @@ class TestSTTFactory(unittest.TestCase):
 class TestTTSFactory(unittest.TestCase):
     """Tests for TTS Service Factory."""
 
-    def test_missing_cartesia_key_raises_error(self):
-        """Cartesia requires CARTESIA_API_KEY."""
-        settings = AppSettings(_env_file=None, cartesia_api_key=None)
-        override = VoiceSettings(provider="cartesia")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_tts_service(settings, override=override)
-        self.assertIn("CARTESIA_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_missing_cartesia_key_falls_back_to_kokoro(self, mock_kokoro_service):
+        """Cartesia without an API key logs warning and falls back to Kokoro."""
+        mock_instance = MagicMock()
+        mock_kokoro_service.return_value = mock_instance
+
+        with patch.dict(
+            sys.modules,
+            {"pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service)},
+        ):
+            settings = AppSettings(_env_file=None, cartesia_api_key=None, tts_provider="kokoro")
+            override = VoiceSettings(
+                provider="cartesia",
+                voice_id="86e30c1d-714b-4074-a1f2-1cb6b552fb49",
+                fallback_voice_id="af_bella",
+                speed=1.00,
+            )
+            with self.assertLogs("backend.engine.providers.tts_factory", level="WARNING") as log:
+                service = create_tts_service(settings, override=override)
+            self.assertEqual(service, mock_instance)
+            self.assertTrue(any("CARTESIA_API_KEY is missing" in m for m in log.output))
+            mock_kokoro_service.assert_called_once_with(voice_id="af_bella", speed=1.00)
+
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_missing_elevenlabs_key_falls_back_to_kokoro(self, mock_kokoro_service):
+        """ElevenLabs without an API key logs warning and falls back to Kokoro."""
+        mock_instance = MagicMock()
+        mock_kokoro_service.return_value = mock_instance
+
+        with patch.dict(
+            sys.modules,
+            {"pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service)},
+        ):
+            settings = AppSettings(_env_file=None, tts_provider="kokoro")
+            override = VoiceSettings(
+                provider="elevenlabs",
+                voice_id="21m00Tcm4TlvDq8ikWAM",
+                fallback_voice_id="af_sarah",
+            )
+            with self.assertLogs("backend.engine.providers.tts_factory", level="WARNING") as log:
+                service = create_tts_service(settings, override=override)
+            self.assertEqual(service, mock_instance)
+            self.assertTrue(any("ELEVENLABS_API_KEY is missing" in m for m in log.output))
+            mock_kokoro_service.assert_called_once_with(voice_id="af_sarah", speed=1.00)
 
     def test_kokoro_default_creation(self):
         """Kokoro TTS instantiates with voice_id and speed."""
