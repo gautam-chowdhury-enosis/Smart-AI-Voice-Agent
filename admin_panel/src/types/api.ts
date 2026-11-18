@@ -76,6 +76,13 @@ export interface KnowledgeDocument {
   ingestion_error?: string | null;
 }
 
+export interface DocumentChunk {
+  id: string;
+  text: string;
+  metadata: Record<string, unknown>;
+  token_count?: number;
+}
+
 export interface PersonaVoiceUpdate {
   voice_id: string;
   provider?: TTSProvider;

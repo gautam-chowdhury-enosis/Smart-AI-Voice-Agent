@@ -61,6 +61,10 @@ class BaseVectorStore(ABC):
     def delete_by_document_id(self, document_id: str) -> int:
         """Deletes all chunks belonging to a canonical document UUID. Returns count of chunks removed."""
 
+    def get_chunks_by_document_id(self, document_id: str) -> list[DocumentChunk]:
+        """Returns all chunks belonging to a canonical document UUID or document name."""
+        return []
+
     @abstractmethod
     def clear(self) -> None:
         """Clears all stored chunks."""
@@ -99,6 +103,9 @@ class UnavailableVectorStore(BaseVectorStore):
         raise VectorStoreUnavailableError(self._message)
 
     def delete_by_document_id(self, document_id: str) -> int:
+        raise VectorStoreUnavailableError(self._message)
+
+    def get_chunks_by_document_id(self, document_id: str) -> list[DocumentChunk]:
         raise VectorStoreUnavailableError(self._message)
 
     def clear(self) -> None:
@@ -299,6 +306,14 @@ class MemoryVectorStore(BaseVectorStore):
         for cid in to_delete:
             self._remove_chunk(cid)
         return len(to_delete)
+
+    def get_chunks_by_document_id(self, document_id: str) -> list[DocumentChunk]:
+        if self._staged_store is not None:
+            return self._staged_store.get_chunks_by_document_id(document_id)
+        return [
+            chunk for chunk in self._chunks.values()
+            if chunk.metadata.get("document_id") == document_id or chunk.metadata.get("doc_name") == document_id
+        ]
 
     def clear(self) -> None:
         if self._staged_store is not None:
@@ -567,6 +582,25 @@ class ChromaVectorStore(BaseVectorStore):
             return len(ids)
         except Exception as exc:
             raise VectorStoreError("ChromaDB could not delete document chunks by ID.") from exc
+
+    def get_chunks_by_document_id(self, document_id: str) -> list[DocumentChunk]:
+        if not self.is_available:
+            raise VectorStoreUnavailableError("ChromaDB is unavailable; document chunks cannot be retrieved.")
+        try:
+            target = self._active_write_collection()
+            existing = target.get(where={"document_id": document_id})
+            ids = existing.get("ids") or []
+            if not ids:
+                existing = target.get(where={"doc_name": document_id})
+                ids = existing.get("ids") or []
+            docs = existing.get("documents") or []
+            metas = existing.get("metadatas") or []
+            chunks: list[DocumentChunk] = []
+            for cid, doc, meta in zip(ids, docs, metas, strict=False):
+                chunks.append(DocumentChunk(id=cid, text=doc, metadata=meta or {}))
+            return chunks
+        except Exception as exc:
+            raise VectorStoreError("ChromaDB could not retrieve document chunks by ID.") from exc
 
     def clear(self) -> None:
         if self.is_available:

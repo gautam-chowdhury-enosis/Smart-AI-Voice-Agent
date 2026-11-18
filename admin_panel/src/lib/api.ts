@@ -1,5 +1,6 @@
 import type {
   DashboardResponse,
+  DocumentChunk,
   GroundingMode,
   KnowledgeDocument,
   KnowledgeDocumentScope,
@@ -145,6 +146,10 @@ export const adminApi = {
     request(
       `/api/v1/admin/knowledge/documents/${encodeURIComponent(documentId)}`,
       { method: "DELETE" },
+    ),
+  getDocumentChunks: (documentId: string): Promise<DocumentChunk[]> =>
+    request(
+      `/api/v1/admin/knowledge/documents/${encodeURIComponent(documentId)}/chunks`,
     ),
   searchKnowledge: (
     query: string,

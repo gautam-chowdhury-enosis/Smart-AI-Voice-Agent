@@ -211,6 +211,24 @@ class KnowledgeHubService:
             raise ValueError(f"Document {document_id} not found.")
         return _build_document_response(doc)
 
+    def get_document_chunks(self, tenant_id: str, document_id: str) -> list[dict[str, Any]]:
+        """Fetch stored vector chunks for a specific document."""
+        tenant_id = self.validate_tenant_id(tenant_id)
+        doc = self.get_document(tenant_id, document_id)
+        store = self._store_for(tenant_id)
+        chunks = store.get_chunks_by_document_id(document_id)
+        if not chunks and doc.name:
+            chunks = store.get_chunks_by_document_id(doc.name)
+        return [
+            {
+                "id": chunk.id,
+                "text": chunk.text,
+                "metadata": chunk.metadata,
+                "token_count": len(chunk.text.split()),
+            }
+            for chunk in chunks
+        ]
+
     def document_count(self, tenant_id: str = "grand-meridian") -> int:
         """Return indexed document count for dashboard health metadata."""
         return len(self.list_documents(tenant_id))

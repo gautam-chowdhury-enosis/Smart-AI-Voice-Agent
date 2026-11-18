@@ -111,6 +111,12 @@ class TestAdminAPI(unittest.TestCase):
                 self.assertEqual(details.status_code, 200)
                 self.assertEqual(details.json()["name"], "policy.md")
 
+                chunks_response = client.get(f"/api/v1/admin/knowledge/documents/{document.id}/chunks", headers=headers)
+                self.assertEqual(chunks_response.status_code, 200)
+                self.assertIsInstance(chunks_response.json(), list)
+                self.assertGreaterEqual(len(chunks_response.json()), 1)
+                self.assertIn("Check-in begins at 3 PM", chunks_response.json()[0]["text"])
+
                 assignment = client.patch(
                     f"/api/v1/admin/knowledge/documents/{document.id}/assignments?tenant_id=grand-meridian",
                     json={"scope": "persona_specific", "assigned_personas": ["hotel_booking_specialist"]},

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 
@@ -144,6 +146,20 @@ def get_knowledge_document(document_id: str, tenant_id: str = "grand-meridian") 
         return get_knowledge_hub().get_document(tenant_id, document_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/knowledge/documents/{document_id}/chunks")
+def get_knowledge_document_chunks(
+    document_id: str,
+    tenant_id: str = "grand-meridian",
+) -> list[dict[str, Any]]:
+    """Fetch stored vector chunks for a specific document."""
+    try:
+        return get_knowledge_hub().get_document_chunks(tenant_id, document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except VectorStoreError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
 
 @router.patch("/knowledge/documents/{document_id}/assignments", response_model=KnowledgeDocumentResponse)

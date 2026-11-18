@@ -259,6 +259,16 @@ export function useUpdatePersonaKnowledgeSettings() {
   });
 }
 
+/** Retrieves stored vector chunks for deep chunk inspection. */
+export function useDocumentChunks(documentId: string | null) {
+  return useQuery({
+    queryKey: ['admin', 'knowledge', 'documents', documentId, 'chunks'],
+    queryFn: () => adminApi.getDocumentChunks(documentId!),
+    enabled: Boolean(documentId),
+    staleTime: 60_000,
+  });
+}
+
 /** Synthesizes an audio preview for the selected Voice Studio profile. */
 export function useVoiceAudition() {
   return useMutation({ mutationFn: adminApi.auditionVoice });

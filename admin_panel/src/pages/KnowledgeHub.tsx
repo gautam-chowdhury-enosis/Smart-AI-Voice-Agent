@@ -4,6 +4,7 @@ import {
   FileText,
   FileUp,
   FlaskConical,
+  Layers,
   Settings2,
   UploadCloud,
 } from 'lucide-react';
@@ -21,6 +22,8 @@ import {
   useUploadKnowledgeDocument,
 } from '../hooks/useAdminApi';
 import type { KnowledgeDocument, KnowledgeDocumentScope } from '../types/api';
+import { BatchUploadDrawer } from './knowledge/components/BatchUploadDrawer';
+import { ChunkInspectorDrawer } from './knowledge/components/ChunkInspectorDrawer';
 import { DocumentAccessModal } from './knowledge/components/DocumentAccessModal';
 import { DocumentList } from './knowledge/components/DocumentList';
 import {
@@ -63,6 +66,8 @@ export function KnowledgeHub() {
     documentId: string;
     documentName: string;
   } | null>(null);
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [inspectingDocument, setInspectingDocument] = useState<KnowledgeDocument | null>(null);
 
   // Grounding policy drafts keyed by persona to preserve edits across tab switches
   const [policyDrafts, setPolicyDrafts] = useState<Record<string, GroundingPolicyDraft>>({});
@@ -101,6 +106,14 @@ export function KnowledgeHub() {
     setSelectedPersonas([]);
   };
 
+  const cancelSelectedFile = () => {
+    setSelectedFile(null);
+    setFileError(null);
+    setAccessScope('tenant_wide');
+    setSelectedPersonas([]);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
   const uploadFile = () => {
     if (!selectedFile) return;
     upload.mutate(
@@ -114,6 +127,7 @@ export function KnowledgeHub() {
           setSelectedFile(null);
           setAccessScope('tenant_wide');
           setSelectedPersonas([]);
+          if (inputRef.current) inputRef.current.value = '';
         },
       },
     );
@@ -280,7 +294,18 @@ export function KnowledgeHub() {
                 <h2 className="section-title">Add Knowledge</h2>
                 <p className="section-copy">PDF, Markdown, or text · maximum 10 MB</p>
               </div>
-              <UploadCloud className="h-5 w-5 text-indigo-300" />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-xs"
+                  onClick={() => setIsBatchOpen(true)}
+                >
+                  <Layers className="mr-1.5 h-3.5 w-3.5 text-indigo-400" />
+                  Batch Upload
+                </Button>
+                <UploadCloud className="h-5 w-5 text-indigo-300" />
+              </div>
             </div>
             <div
               onDragEnter={(event) => {
@@ -327,9 +352,19 @@ export function KnowledgeHub() {
                       {(selectedFile.size / 1024).toFixed(1)} KB · tenant: grand-meridian
                     </p>
                   </div>
-                  <Button disabled={upload.isPending} onClick={uploadFile}>
-                    {upload.isPending ? 'Indexing…' : 'Index now'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={upload.isPending}
+                      onClick={cancelSelectedFile}
+                    >
+                      Cancel
+                    </Button>
+                    <Button disabled={upload.isPending} onClick={uploadFile}>
+                      {upload.isPending ? 'Indexing…' : 'Index now'}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
@@ -413,6 +448,7 @@ export function KnowledgeHub() {
             }
             onManageAccess={openAccessDrawer}
             onDeleteDocument={handleDeleteDocument}
+            onInspectChunks={(doc) => setInspectingDocument(doc)}
             personaOptions={personaOptions}
           />
 
@@ -484,6 +520,20 @@ export function KnowledgeHub() {
         isPending={updateAssignments.isPending}
         onConfirm={confirmOrphanAssignment}
         onCancel={() => setOrphanConfirmDoc(null)}
+      />
+
+      {/* Multi-File Batch Uploader Drawer */}
+      <BatchUploadDrawer
+        isOpen={isBatchOpen}
+        onClose={() => setIsBatchOpen(false)}
+        personaOptions={personaOptions}
+      />
+
+      {/* Vector Chunk Inspector Drawer */}
+      <ChunkInspectorDrawer
+        isOpen={Boolean(inspectingDocument)}
+        onClose={() => setInspectingDocument(null)}
+        document={inspectingDocument}
       />
     </div>
   );

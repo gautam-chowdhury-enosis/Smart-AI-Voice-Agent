@@ -27,6 +27,7 @@ export interface DocumentListProps {
   onToggleStatus: (documentId: string, nextStatus: boolean) => void;
   onManageAccess: (document: KnowledgeDocument) => void;
   onDeleteDocument: (documentId: string, documentName: string) => void;
+  onInspectChunks?: (document: KnowledgeDocument) => void;
   personaOptions: readonly PersonaOption[];
 }
 
@@ -40,6 +41,7 @@ export function DocumentList({
   onToggleStatus,
   onManageAccess,
   onDeleteDocument,
+  onInspectChunks,
   personaOptions,
 }: DocumentListProps) {
   const [searchFilter, setSearchFilter] = useState('');
@@ -214,9 +216,22 @@ export function DocumentList({
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {document.chunks_indexed} chunks · {formatDateTime(document.uploaded_at)} · version {document.version}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      <button
+                        type="button"
+                        onClick={() => onInspectChunks?.(document)}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 transition"
+                        title="Click to inspect vector chunks in detail"
+                        aria-label={`Inspect ${document.chunks_indexed} chunks for ${document.name}`}
+                      >
+                        <Layers className="h-3 w-3" />
+                        {document.chunks_indexed} chunks
+                      </button>
+                      <span>·</span>
+                      <span>{formatDateTime(document.uploaded_at)}</span>
+                      <span>·</span>
+                      <span>version {document.version}</span>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
