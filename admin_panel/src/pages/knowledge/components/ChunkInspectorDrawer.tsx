@@ -84,14 +84,14 @@ export function ChunkInspectorDrawer({
       className="max-w-4xl max-h-[90vh] flex flex-col"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4 shrink-0 dark:border-slate-800">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
             <Layers className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-base font-semibold text-white">
+              <h2 className="truncate text-base font-semibold text-slate-900 dark:text-white">
                 {document.name}
               </h2>
               <Badge tone="primary">
@@ -109,7 +109,7 @@ export function ChunkInspectorDrawer({
           type="button"
           onClick={onClose}
           aria-label="Close chunk inspector"
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <X className="h-5 w-5" />
         </button>
@@ -193,9 +193,9 @@ export function ChunkInspectorDrawer({
             return (
               <div
                 key={chunk.id}
-                className="group rounded-xl border border-slate-800 bg-slate-950/50 p-4 transition hover:border-slate-700"
+                className="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2.5 dark:border-slate-800/80">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-1 font-mono text-xs font-semibold text-indigo-300">
                       <Hash className="h-3 w-3" />
@@ -213,7 +213,7 @@ export function ChunkInspectorDrawer({
                     type="button"
                     onClick={() => copyToClipboard(chunk.id, chunk.text)}
                     aria-label={`Copy chunk ${chunkIndex + 1} text`}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
                   >
                     {copiedChunkId === chunk.id ? (
                       <>
@@ -230,7 +230,7 @@ export function ChunkInspectorDrawer({
                 </div>
 
                 {/* Monospace Excerpt Text */}
-                <div className="mt-3 rounded-lg border border-slate-850 bg-slate-900/60 p-3 font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap break-words selection:bg-indigo-500 selection:text-white">
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-relaxed text-slate-800 whitespace-pre-wrap break-words selection:bg-indigo-500 selection:text-white dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
                   {chunk.text}
                 </div>
 
@@ -241,7 +241,7 @@ export function ChunkInspectorDrawer({
                     {Object.entries(chunk.metadata).map(([key, val]) => (
                       <span
                         key={key}
-                        className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-400 border border-slate-800"
+                        className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 border border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"
                       >
                         {key}: {String(val)}
                       </span>
@@ -255,7 +255,7 @@ export function ChunkInspectorDrawer({
       </div>
 
       {/* Footer & Pagination */}
-      <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between border-t border-slate-800 pt-3 shrink-0 gap-3">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between border-t border-slate-200 pt-3 shrink-0 gap-3 dark:border-slate-800">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <Database className="h-3.5 w-3.5 text-indigo-400" />
           <span>Local ChromaDB HNSW Cosine Space</span>

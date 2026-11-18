@@ -58,7 +58,7 @@ export function DocumentList({
   if (isError) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-rose-200">
+        <p className="text-sm text-rose-600 dark:text-rose-200">
           {errorMessage || 'Document status is unavailable.'}
         </p>
         <Button variant="secondary" className="mt-4" onClick={onRefetch}>
@@ -148,16 +148,16 @@ export function DocumentList({
 
       {/* Documents List */}
       {allDocuments.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-8 text-center">
-          <Files className="mx-auto h-6 w-6 text-slate-600" />
-          <p className="mt-2 text-sm font-medium text-slate-400">No uploaded documents yet</p>
+        <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-transparent">
+          <Files className="mx-auto h-6 w-6 text-slate-400 dark:text-slate-600" />
+          <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-400">No uploaded documents yet</p>
           <p className="mt-1 text-xs text-slate-500">
             Upload PDF, Markdown, or text documents to train your voice personas.
           </p>
         </div>
       ) : filteredDocuments.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-6 text-center">
-          <p className="text-sm text-slate-400">
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-950/40">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             No documents match your current filter criteria:
             {searchFilter ? ` "${searchFilter}"` : ''}
             {scopeFilter !== 'all' ? ` (${scopeFilter.replace('_', ' ')})` : ''}
@@ -193,13 +193,13 @@ export function DocumentList({
                     ? 'border-indigo-500/40 bg-indigo-500/[0.04]'
                     : isFailed
                       ? 'border-rose-500/30 bg-rose-500/[0.03]'
-                      : 'border-slate-800 bg-slate-950/35'
+                      : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/35'
                 }`}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-slate-100">{document.name}</p>
+                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{document.name}</p>
 
                       {isIndexing ? (
                         <Badge tone="warning">
@@ -235,7 +235,7 @@ export function DocumentList({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-2 py-1.5 text-xs font-medium text-slate-200">
+                    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-2 py-1.5 text-xs font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
                       <span>{document.is_enabled ? 'Enabled' : 'Disabled'}</span>
                       <button
                         type="button"
@@ -245,7 +245,7 @@ export function DocumentList({
                         aria-label={`Toggle active status for ${document.name}`}
                         onClick={() => onToggleStatus(document.id, !document.is_enabled)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                          document.is_enabled ? 'bg-indigo-500' : 'bg-slate-700'
+                          document.is_enabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'
                         }`}
                       >
                         <span
@@ -267,7 +267,7 @@ export function DocumentList({
                       variant="ghost"
                       disabled={isDeleting}
                       aria-label={`Delete ${document.name}`}
-                      className="border border-slate-800 bg-slate-900/60 text-rose-200 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="border border-slate-200 bg-white text-rose-600 hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-800 dark:bg-slate-900/60 dark:text-rose-200 dark:hover:text-rose-100"
                       onClick={() => onDeleteDocument(document.id, document.name)}
                     >
                       <Trash2 className="h-4 w-4" />Delete

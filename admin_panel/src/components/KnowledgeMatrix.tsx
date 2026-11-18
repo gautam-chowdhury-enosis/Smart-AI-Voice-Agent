@@ -35,16 +35,16 @@ export function KnowledgeMatrix({
         <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-slate-900/90 pr-4 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 backdrop-blur">
+              <th className="sticky left-0 z-10 bg-white/95 pr-4 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 backdrop-blur dark:bg-slate-950/90 dark:text-slate-400">
                 Document
               </th>
-              <th className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <th className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400">
                 Scope
               </th>
               {personas.map(({ key, name }) => (
                 <th
                   key={key}
-                  className="px-3 pb-2 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-400"
+                  className="px-3 pb-2 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400"
                 >
                   {name}
                 </th>
@@ -59,16 +59,16 @@ export function KnowledgeMatrix({
                 : (document.assigned_personas?.length ?? 0);
 
               return (
-                <tr key={document.id} className="rounded-xl border border-slate-800 bg-slate-950/35">
-                  <td className="sticky left-0 z-10 rounded-l-xl border border-slate-800 bg-slate-950/90 px-3 py-3 align-middle backdrop-blur">
+                <tr key={document.id} className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950/35 dark:hover:bg-slate-900/40">
+                  <td className="sticky left-0 z-10 rounded-l-xl border border-slate-200 bg-white/90 px-3 py-3 align-middle backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
                     <div>
-                      <p className="font-medium text-slate-100">{document.name}</p>
+                      <p className="font-medium text-slate-900 dark:text-slate-100">{document.name}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         {document.chunks_indexed} chunks
                       </p>
                     </div>
                   </td>
-                  <td className="border border-slate-800 bg-slate-950/35 px-3 py-3 align-middle">
+                  <td className="border border-slate-200 bg-white px-3 py-3 align-middle dark:border-slate-800 dark:bg-slate-950/35">
                     {isTenantWide ? (
                       <Badge tone="neutral">Inherited (All)</Badge>
                     ) : assignedCount === 0 ? (
@@ -85,14 +85,14 @@ export function KnowledgeMatrix({
                     return (
                       <td
                         key={`${document.id}-${key}`}
-                        className="border border-slate-800 bg-slate-950/35 px-3 py-3 text-center align-middle"
+                        className="border border-slate-200 bg-white px-3 py-3 text-center align-middle dark:border-slate-800 dark:bg-slate-950/35"
                       >
                         <input
                           type="checkbox"
                           checked={hasAccess}
                           aria-label={`${document.name} access for ${name}`}
                           onChange={() => onToggleAssignment(document.id, key, !hasAccess)}
-                          className="h-4 w-4 cursor-pointer rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300 bg-white text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-indigo-500"
                         />
                       </td>
                     );

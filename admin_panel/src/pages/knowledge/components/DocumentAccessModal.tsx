@@ -63,15 +63,15 @@ export function DocumentAccessModal({
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-300">
             Document access
           </p>
-          <h3 className="mt-1 text-lg font-semibold text-white">{document.name}</h3>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{document.name}</h3>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-slate-700 p-2 text-slate-300 hover:border-slate-500 hover:text-white"
+          className="rounded-full border border-slate-300 p-2 text-slate-500 hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
           aria-label="Close access modal"
         >
           <X className="h-4 w-4" />
@@ -79,7 +79,7 @@ export function DocumentAccessModal({
       </div>
 
       <div className="mt-5 space-y-2">
-        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-2.5 text-sm text-slate-200">
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200">
           <input
             type="radio"
             name="document-access-modal"
@@ -89,7 +89,7 @@ export function DocumentAccessModal({
           />
           🌐 All Voice Personas (Shared hotel policies)
         </label>
-        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-2.5 text-sm text-slate-200">
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200">
           <input
             type="radio"
             name="document-access-modal"
@@ -112,8 +112,8 @@ export function DocumentAccessModal({
                 onClick={() => togglePersona(key)}
                 className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition ${
                   selected
-                    ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-100'
-                    : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+                    ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-700 dark:text-indigo-100'
+                    : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
                 }`}
               >
                 {selected ? '☑' : '☐'} {name}
@@ -123,7 +123,7 @@ export function DocumentAccessModal({
         </div>
       )}
 
-      <div className="mt-6 flex justify-end gap-3 border-t border-slate-800/80 pt-5">
+      <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800/80">
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>

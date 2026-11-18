@@ -133,7 +133,7 @@ export function RetrievalPlayground({
                   key={utterance}
                   type="button"
                   onClick={() => handleUtteranceClick(utterance)}
-                  className="rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-300 transition hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-200"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:text-indigo-200"
                 >
                   {utterance}
                 </button>
@@ -147,8 +147,8 @@ export function RetrievalPlayground({
         {search.isIdle ? (
           <Card className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
             <Search className="h-8 w-8 text-slate-600" />
-            <h3 className="mt-3 text-base font-semibold text-slate-200">Ready to test voice retrieval</h3>
-            <p className="mt-1 max-w-md text-sm leading-6 text-slate-400">
+            <h3 className="mt-3 text-base font-semibold text-slate-800 dark:text-slate-200">Ready to test voice retrieval</h3>
+            <p className="mt-1 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
               Submit a query above or click any hospitality pill to inspect chunk confidence scores, speech safety gating, and spoken fallbacks.
             </p>
           </Card>
@@ -171,7 +171,7 @@ export function RetrievalPlayground({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-200">Simulating Scope:</span>
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Simulating Scope:</span>
                 <Badge tone="primary">{activePersonaName}</Badge>
               </div>
               <div className="flex items-center gap-2">
@@ -225,12 +225,12 @@ export function RetrievalPlayground({
                           : 'border-amber-500/25 bg-amber-500/[0.02]'
                       }`}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-slate-800/80">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-slate-400">
+                          <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400">
                             #{index + 1}
                           </span>
-                          <span className="text-sm font-semibold text-slate-100">{chunk.source}</span>
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{chunk.source}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge tone={isSafe ? 'success' : 'warning'}>
@@ -242,7 +242,7 @@ export function RetrievalPlayground({
                         </div>
                       </div>
 
-                      <p className="mt-3 font-mono text-xs leading-6 text-slate-300 whitespace-pre-wrap">
+                      <p className="mt-3 font-mono text-xs leading-6 text-slate-700 whitespace-pre-wrap dark:text-slate-300">
                         {chunk.excerpt}
                       </p>
 

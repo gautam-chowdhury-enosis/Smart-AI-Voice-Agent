@@ -229,18 +229,18 @@ export function KnowledgeHub() {
   return (
     <div className="mx-auto max-w-7xl animate-in fade-in duration-500">
       <header className="mb-6">
-        <p className="text-sm font-semibold text-indigo-300">RETRIEVAL OPERATIONS</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+        <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-300">RETRIEVAL OPERATIONS</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl dark:text-white">
           Knowledge Hub
         </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
           Stage operational documents, cross-check multi-persona scoping, and test live
           conversational retrieval guardrails for Grand Meridian.
         </p>
       </header>
 
       {/* 3-Tab Segmented Cockpit Navigation */}
-      <div className="mb-6 flex border-b border-slate-800 space-x-6">
+      <div className="mb-6 flex border-b border-slate-200 space-x-6 dark:border-slate-800">
         <button
           type="button"
           role="tab"
@@ -248,8 +248,8 @@ export function KnowledgeHub() {
           onClick={() => setActiveTab('documents')}
           className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
             activeTab === 'documents'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <FileText className="h-4 w-4" />
@@ -262,8 +262,8 @@ export function KnowledgeHub() {
           onClick={() => setActiveTab('playground')}
           className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
             activeTab === 'playground'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <FlaskConical className="h-4 w-4" />
@@ -276,8 +276,8 @@ export function KnowledgeHub() {
           onClick={() => setActiveTab('policies')}
           className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
             activeTab === 'policies'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <Settings2 className="h-4 w-4" />
@@ -318,14 +318,14 @@ export function KnowledgeHub() {
               className={`mt-6 rounded-2xl border border-dashed p-8 text-center transition ${
                 isDragging
                   ? 'border-indigo-400 bg-indigo-500/10'
-                  : 'border-slate-700 bg-slate-950/35'
+                  : 'border-slate-300 bg-slate-50 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/35 dark:hover:border-slate-600'
               }`}
             >
               <FileUp className="mx-auto h-8 w-8 text-indigo-300" />
-              <p className="mt-4 text-sm font-semibold text-slate-100">
+              <p className="mt-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Drop a policy document here
               </p>
-              <p className="mt-1 text-sm text-slate-500">or choose a file from your computer</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">or choose a file from your computer</p>
               <Button
                 variant="secondary"
                 className="mt-5"
@@ -367,12 +367,12 @@ export function KnowledgeHub() {
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                     Agent access
                   </p>
                   <div className="mt-3 space-y-2">
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm text-slate-200">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200">
                       <input
                         type="radio"
                         name="knowledge-access"
@@ -382,7 +382,7 @@ export function KnowledgeHub() {
                       />
                       🌐 All Voice Personas (Shared hotel policies)
                     </label>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm text-slate-200">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200">
                       <input
                         type="radio"
                         name="knowledge-access"
@@ -405,8 +405,8 @@ export function KnowledgeHub() {
                             onClick={() => togglePersonaSelection(key)}
                             className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition ${
                               isSelected
-                                ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-100'
-                                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+                                ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-700 dark:text-indigo-100'
+                                : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
                             }`}
                           >
                             {isSelected ? '☑' : '☐'} {name}
@@ -421,7 +421,7 @@ export function KnowledgeHub() {
             {(fileError || upload.isError) && (
               <p
                 role="alert"
-                className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100"
+                className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm leading-6 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-100"
               >
                 {fileError ??
                   (upload.error instanceof Error
@@ -430,7 +430,7 @@ export function KnowledgeHub() {
               </p>
             )}
             {upload.isSuccess && (
-              <p className="mt-4 flex items-center gap-2 text-sm text-emerald-300">
+              <p className="mt-4 flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-300">
                 <CheckCircle2 className="h-4 w-4" />
                 Document indexed in {upload.data.chunks_indexed} voice-ready chunks.
               </p>

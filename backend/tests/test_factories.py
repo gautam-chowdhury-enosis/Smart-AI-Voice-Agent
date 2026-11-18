@@ -60,12 +60,10 @@ class TestConfiguration(unittest.TestCase):
         self.assertEqual(persona.llm.model, "llama3.2:3b")
         self.assertIn("hotel_check_availability", persona.tools)
 
-    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
-    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
-    def test_default_hotel_services_initialize_with_zero_cloud_keys(
-        self, mock_kokoro_service, mock_openai_service
-    ):
+    def test_default_hotel_services_initialize_with_zero_cloud_keys(self):
         """Validates default hotel persona services can be instantiated with zero cloud keys."""
+        mock_openai_service = MagicMock()
+        mock_kokoro_service = MagicMock()
         mock_openai_service.return_value = MagicMock()
         mock_kokoro_service.return_value = MagicMock()
 
@@ -234,9 +232,9 @@ class TestSTTFactory(unittest.TestCase):
 class TestTTSFactory(unittest.TestCase):
     """Tests for TTS Service Factory."""
 
-    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
-    def test_missing_cartesia_key_falls_back_to_kokoro(self, mock_kokoro_service):
+    def test_missing_cartesia_key_falls_back_to_kokoro(self):
         """Cartesia without an API key logs warning and falls back to Kokoro."""
+        mock_kokoro_service = MagicMock()
         mock_instance = MagicMock()
         mock_kokoro_service.return_value = mock_instance
 
@@ -257,9 +255,9 @@ class TestTTSFactory(unittest.TestCase):
             self.assertTrue(any("CARTESIA_API_KEY is missing" in m for m in log.output))
             mock_kokoro_service.assert_called_once_with(voice_id="af_bella", speed=1.00)
 
-    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
-    def test_missing_elevenlabs_key_falls_back_to_kokoro(self, mock_kokoro_service):
+    def test_missing_elevenlabs_key_falls_back_to_kokoro(self):
         """ElevenLabs without an API key logs warning and falls back to Kokoro."""
+        mock_kokoro_service = MagicMock()
         mock_instance = MagicMock()
         mock_kokoro_service.return_value = mock_instance
 

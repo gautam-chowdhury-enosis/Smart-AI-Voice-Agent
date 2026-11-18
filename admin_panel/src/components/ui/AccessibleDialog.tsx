@@ -133,7 +133,7 @@ export function AccessibleDialog({
         aria-describedby={description ? 'dialog-description' : undefined}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-slate-950/70 focus:outline-none animate-in zoom-in-95 duration-200 ${className}`}
+        className={`w-full max-w-lg rounded-2xl border border-slate-200 bg-white text-slate-900 p-6 shadow-2xl shadow-slate-200/70 focus:outline-none animate-in zoom-in-95 duration-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:shadow-slate-950/70 ${className}`}
       >
         <div className="sr-only" id="dialog-title">
           {title}

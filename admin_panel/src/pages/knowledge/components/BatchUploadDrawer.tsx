@@ -210,14 +210,14 @@ export function BatchUploadDrawer({
       description="Stage multiple operational documents for simultaneous ingestion into Grand Meridian knowledge base"
       className="max-w-3xl"
     >
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-400">
             <UploadCloud className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-white">Batch Document Ingestion</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">Batch Document Ingestion</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Drag and drop multiple files for simultaneous indexing
             </p>
           </div>
@@ -227,7 +227,7 @@ export function BatchUploadDrawer({
           onClick={onClose}
           disabled={isProcessing}
           aria-label="Close batch upload modal"
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition disabled:opacity-40"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition disabled:opacity-40 dark:hover:bg-slate-800 dark:hover:text-white"
         >
           <X className="h-5 w-5" />
         </button>
@@ -245,11 +245,11 @@ export function BatchUploadDrawer({
         className={`mt-4 rounded-xl border border-dashed p-6 text-center transition ${
           isDragging
             ? 'border-indigo-400 bg-indigo-500/10'
-            : 'border-slate-700 bg-slate-950/40 hover:border-slate-600'
+            : 'border-slate-300 bg-slate-50 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/40 dark:hover:border-slate-600'
         }`}
       >
         <FileUp className="mx-auto h-7 w-7 text-indigo-300" />
-        <p className="mt-2 text-sm font-medium text-slate-100">
+        <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
           Drop multiple operational documents here
         </p>
         <p className="mt-1 text-xs text-slate-500">PDF, Markdown, or text · up to 10 MB per file</p>
@@ -280,7 +280,7 @@ export function BatchUploadDrawer({
       )}
 
       {/* Global Access Scope Assignment */}
-      <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3.5">
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-950/40">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Batch Access Scope
@@ -289,7 +289,7 @@ export function BatchUploadDrawer({
         </div>
 
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/50 p-2.5 text-xs text-slate-200 hover:border-slate-700 transition">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-700 hover:border-slate-300 transition dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200 dark:hover:border-slate-700">
             <input
               type="radio"
               name="batch-scope"
@@ -300,7 +300,7 @@ export function BatchUploadDrawer({
             />
             <span>🌐 All Voice Personas (Shared)</span>
           </label>
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/50 p-2.5 text-xs text-slate-200 hover:border-slate-700 transition">
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-white p-2.5 text-xs text-slate-700 hover:border-slate-300 transition dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200 dark:hover:border-slate-700">
             <input
               type="radio"
               name="batch-scope"
@@ -314,7 +314,7 @@ export function BatchUploadDrawer({
         </div>
 
         {accessScope === 'persona_specific' && (
-          <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+          <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             {personaOptions.map(({ key, name }) => {
               const isSelected = selectedPersonas.includes(key);
               return (
@@ -325,8 +325,8 @@ export function BatchUploadDrawer({
                   onClick={() => togglePersonaSelection(key)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
                     isSelected
-                      ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-100'
-                      : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+                      ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-700 dark:text-indigo-100'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   {isSelected ? '☑' : '☐'} {name}
@@ -362,7 +362,7 @@ export function BatchUploadDrawer({
         </div>
 
         {queue.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 p-6 text-center text-xs text-slate-500">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/20">
             No files staged in the queue yet. Drop files above or browse to get started.
           </div>
         ) : (
@@ -377,13 +377,13 @@ export function BatchUploadDrawer({
                       ? 'border-rose-500/30 bg-rose-500/[0.04]'
                       : item.status === 'uploading'
                         ? 'border-indigo-500/40 bg-indigo-500/[0.06]'
-                        : 'border-slate-800 bg-slate-950/40'
+                        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/40'
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
                   <FileText className="h-4 w-4 shrink-0 text-slate-400" />
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-slate-200">{item.file.name}</p>
+                    <p className="truncate font-medium text-slate-800 dark:text-slate-200">{item.file.name}</p>
                     <p className="text-[11px] text-slate-500">
                       {formatFileSize(item.file.size)}
                       {item.chunksIndexed !== undefined && ` · ${item.chunksIndexed} chunks indexed`}
@@ -413,7 +413,7 @@ export function BatchUploadDrawer({
                       type="button"
                       onClick={() => removeFile(item.id)}
                       aria-label={`Remove ${item.file.name} from queue`}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-rose-400 transition"
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-500 transition dark:hover:bg-slate-800 dark:hover:text-rose-400"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -445,7 +445,7 @@ export function BatchUploadDrawer({
       )}
 
       {/* Footer Actions */}
-      <div className="mt-5 flex items-center justify-between border-t border-slate-800 pt-4">
+      <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
         <div className="flex items-center gap-2">
           {indexedCount > 0 && (
             <span className="text-xs text-emerald-400">

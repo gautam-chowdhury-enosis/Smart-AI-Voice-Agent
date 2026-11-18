@@ -47,19 +47,19 @@ export function ConfirmDialog({
         <div
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
             isDestructive
-              ? 'border border-rose-500/30 bg-rose-500/10 text-rose-300'
-              : 'border border-amber-500/30 bg-amber-500/10 text-amber-300'
+              ? 'border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
+              : 'border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300'
           }`}
         >
           <AlertTriangle className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-white">{title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</p>
         </div>
       </div>
 
-      <div className="mt-6 flex justify-end gap-3 border-t border-slate-800/80 pt-5">
+      <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-800/80">
         <Button
           ref={cancelButtonRef}
           variant="secondary"
