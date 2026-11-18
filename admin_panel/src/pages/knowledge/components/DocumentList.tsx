@@ -1,4 +1,16 @@
-import { AlertCircle, AlertTriangle, Files, Loader2, PencilLine, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  Files,
+  HardDrive,
+  Layers,
+  Loader2,
+  PencilLine,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
@@ -18,7 +30,7 @@ export interface DocumentListProps {
   personaOptions: readonly PersonaOption[];
 }
 
-/** Operational document inventory list displaying chunk status, ingestion state machine, and scoping controls. */
+/** Operational document inventory list displaying chunk status, filters, and metric summaries. */
 export function DocumentList({
   documents,
   isLoading,
@@ -30,6 +42,9 @@ export function DocumentList({
   onDeleteDocument,
   personaOptions,
 }: DocumentListProps) {
+  const [searchFilter, setSearchFilter] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'tenant_wide' | 'persona_specific'>('all');
+
   if (isLoading) {
     return (
       <Card className="p-6">
@@ -51,19 +66,114 @@ export function DocumentList({
     );
   }
 
+  const allDocuments = documents ?? [];
+  const totalChunks = allDocuments.reduce((acc, doc) => acc + (doc.chunks_indexed ?? 0), 0);
+  const estimatedStorageKb = Math.round(totalChunks * 1.5);
+
+  const filteredDocuments = allDocuments.filter((doc) => {
+    const matchesSearch = doc.name.toLowerCase().includes(searchFilter.toLowerCase().trim());
+    const matchesScope =
+      scopeFilter === 'all'
+        ? true
+        : scopeFilter === 'tenant_wide'
+          ? doc.scope === 'tenant_wide'
+          : doc.scope === 'persona_specific';
+    return matchesSearch && matchesScope;
+  });
+
   return (
     <Card className="p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="section-title">Indexed documents</h2>
-          <p className="section-copy">Active for this tenant</p>
+          <h2 className="section-title">Indexed Documents</h2>
+          <p className="section-copy">Active for Grand Meridian voice agents</p>
         </div>
-        <Badge tone="neutral">{documents?.length ?? 0}</Badge>
+
+        {/* Aggregate Summary Metric Chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="neutral">
+            <Files className="mr-1 inline h-3 w-3" />
+            {allDocuments.length} Documents
+          </Badge>
+          <Badge tone="primary">
+            <Layers className="mr-1 inline h-3 w-3" />
+            {totalChunks} Chunks
+          </Badge>
+          <Badge tone="accent">
+            <HardDrive className="mr-1 inline h-3 w-3" />
+            ~{estimatedStorageKb} KB Indexed
+          </Badge>
+        </div>
       </div>
 
-      {documents?.length ? (
+      {/* Filter and Search Bar */}
+      <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_200px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Filter documents by filename..."
+            aria-label="Filter documents by filename"
+            className="field pl-9 pr-9"
+          />
+          {searchFilter && (
+            <button
+              type="button"
+              onClick={() => setSearchFilter('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              aria-label="Clear filename filter"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <select
+          value={scopeFilter}
+          onChange={(e) =>
+            setScopeFilter(e.target.value as 'all' | 'tenant_wide' | 'persona_specific')
+          }
+          aria-label="Filter by scope"
+          className="field"
+        >
+          <option value="all">All Scopes</option>
+          <option value="tenant_wide">Tenant-Wide (Shared)</option>
+          <option value="persona_specific">Persona-Restricted</option>
+        </select>
+      </div>
+
+      {/* Documents List */}
+      {allDocuments.length === 0 ? (
+        <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-8 text-center">
+          <Files className="mx-auto h-6 w-6 text-slate-600" />
+          <p className="mt-2 text-sm font-medium text-slate-400">No uploaded documents yet</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Upload PDF, Markdown, or text documents to train your voice personas.
+          </p>
+        </div>
+      ) : filteredDocuments.length === 0 ? (
+        <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-6 text-center">
+          <p className="text-sm text-slate-400">
+            No documents match your current filter criteria:
+            {searchFilter ? ` "${searchFilter}"` : ''}
+            {scopeFilter !== 'all' ? ` (${scopeFilter.replace('_', ' ')})` : ''}
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-3 text-xs"
+            onClick={() => {
+              setSearchFilter('');
+              setScopeFilter('all');
+            }}
+          >
+            Clear Filters
+          </Button>
+        </div>
+      ) : (
         <ul className="mt-5 space-y-3">
-          {documents.map((document) => {
+          {filteredDocuments.map((document) => {
             const isIndexing =
               document.ingestion_status === 'indexing' || document.ingestion_status === 'pending';
             const isFailed = document.ingestion_status === 'failed';
@@ -190,11 +300,6 @@ export function DocumentList({
             );
           })}
         </ul>
-      ) : (
-        <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-5 text-center">
-          <Files className="mx-auto h-5 w-5 text-slate-600" />
-          <p className="mt-2 text-sm text-slate-500">No uploaded documents yet.</p>
-        </div>
       )}
     </Card>
   );

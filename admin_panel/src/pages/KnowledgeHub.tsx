@@ -1,5 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { CheckCircle2, FileSearch, FileUp, Search, UploadCloud } from 'lucide-react';
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import {
+  CheckCircle2,
+  FileText,
+  FileUp,
+  FlaskConical,
+  Settings2,
+  UploadCloud,
+} from 'lucide-react';
 
 import { KnowledgeMatrix } from '../components/KnowledgeMatrix';
 import { Button } from '../components/ui/button';
@@ -9,32 +16,39 @@ import {
   useAvailablePersonas,
   useDeleteKnowledgeDocument,
   useKnowledgeDocuments,
-  useKnowledgeSearch,
-  usePersonaKnowledgeSettings,
   useToggleDocumentStatus,
   useUpdateDocumentAssignments,
-  useUpdatePersonaKnowledgeSettings,
   useUploadKnowledgeDocument,
 } from '../hooks/useAdminApi';
 import type { KnowledgeDocument, KnowledgeDocumentScope } from '../types/api';
 import { DocumentAccessModal } from './knowledge/components/DocumentAccessModal';
 import { DocumentList } from './knowledge/components/DocumentList';
-import { GroundingPolicyPanel, type GroundingPolicyDraft } from './knowledge/components/GroundingPolicyPanel';
-import { SearchResults } from './knowledge/components/SearchResults';
+import {
+  GroundingPolicyWorkbench,
+  type GroundingPolicyDraft,
+} from './knowledge/components/GroundingPolicyWorkbench';
+import { RetrievalPlayground } from './knowledge/components/RetrievalPlayground';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ['.pdf', '.md', '.txt'];
 
-/** Tenant-scoped upload and retrieval testing workspace for operational knowledge. */
+type KnowledgeTab = 'documents' | 'playground' | 'policies';
+
+/**
+ * Tenant-scoped knowledge base operations cockpit featuring 3-tab segmented navigation:
+ * 1. Document Management & Scoping Matrix
+ * 2. Decoupled Retrieval Playground Simulator
+ * 3. Persona Grounding Safety Policies
+ */
 export function KnowledgeHub() {
+  const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents');
   const personaOptions = useAvailablePersonas();
   const documents = useKnowledgeDocuments();
   const upload = useUploadKnowledgeDocument();
   const updateAssignments = useUpdateDocumentAssignments();
   const toggleStatus = useToggleDocumentStatus();
   const deleteDocument = useDeleteKnowledgeDocument();
-  const search = useKnowledgeSearch();
-  const updatePersonaSettings = useUpdatePersonaKnowledgeSettings();
+
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -42,28 +56,31 @@ export function KnowledgeHub() {
   const [accessScope, setAccessScope] = useState<KnowledgeDocumentScope>('tenant_wide');
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [editingDocument, setEditingDocument] = useState<KnowledgeDocument | null>(null);
-  const [deletingDocument, setDeletingDocument] = useState<{ id: string; name: string } | null>(null);
-  const [orphanConfirmDoc, setOrphanConfirmDoc] = useState<{ documentId: string; documentName: string } | null>(null);
-  const [selectedPersonaKey, setSelectedPersonaKey] = useState<string>('all');
-  const [query, setQuery] = useState('What time are check-in and check-out?');
-  const [policyDraft, setPolicyDraft] = useState<GroundingPolicyDraft>({
-    grounding_mode: 'hybrid_balanced',
-    min_relevance_score: 0.65,
-    max_chunks_per_turn: 3,
-    custom_fallback_spoken: '',
-  });
-  const activePersonaKey = selectedPersonaKey === 'all' ? 'hotel_booking_specialist' : selectedPersonaKey;
-  const personaSettings = usePersonaKnowledgeSettings(activePersonaKey);
+  const [deletingDocument, setDeletingDocument] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [orphanConfirmDoc, setOrphanConfirmDoc] = useState<{
+    documentId: string;
+    documentName: string;
+  } | null>(null);
 
-  useEffect(() => {
-    if (!personaSettings.data) return;
-    setPolicyDraft({
-      grounding_mode: personaSettings.data.grounding_mode,
-      min_relevance_score: personaSettings.data.min_relevance_score,
-      max_chunks_per_turn: personaSettings.data.max_chunks_per_turn,
-      custom_fallback_spoken: personaSettings.data.custom_fallback_spoken ?? '',
-    });
-  }, [personaSettings.data]);
+  // Grounding policy drafts keyed by persona to preserve edits across tab switches
+  const [policyDrafts, setPolicyDrafts] = useState<Record<string, GroundingPolicyDraft>>({});
+
+  const updateDraftPolicy = (personaKey: string, patch: Partial<GroundingPolicyDraft>) => {
+    setPolicyDrafts((prev) => ({
+      ...prev,
+      [personaKey]: {
+        ...(prev[personaKey] ?? {
+          grounding_mode: 'hybrid_balanced',
+          min_relevance_score: 0.65,
+          max_chunks_per_turn: 3,
+          custom_fallback_spoken: '',
+        }),
+        ...patch,
+      },
+    }));
+  };
 
   const chooseFile = (file: File | undefined) => {
     if (!file) return;
@@ -104,7 +121,9 @@ export function KnowledgeHub() {
 
   const togglePersonaSelection = (personaKey: string) => {
     setSelectedPersonas((current) =>
-      current.includes(personaKey) ? current.filter((key) => key !== personaKey) : [...current, personaKey],
+      current.includes(personaKey)
+        ? current.filter((key) => key !== personaKey)
+        : [...current, personaKey],
     );
   };
 
@@ -132,16 +151,8 @@ export function KnowledgeHub() {
     setIsDragging(false);
     chooseFile(event.dataTransfer.files[0]);
   };
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0]);
-  const handleSearch = (event: FormEvent) => {
-    event.preventDefault();
-    if (query.trim().length >= 2) {
-      search.mutate({
-        query: query.trim(),
-        persona_key: selectedPersonaKey === 'all' ? undefined : selectedPersonaKey,
-      });
-    }
-  };
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) =>
+    chooseFile(event.target.files?.[0]);
 
   const applyMatrixAssignment = (
     documentId: string,
@@ -197,37 +208,76 @@ export function KnowledgeHub() {
     );
   };
 
-  const savePersonaSettings = () => {
-    updatePersonaSettings.mutate({
-      personaKey: activePersonaKey,
-      payload: {
-        grounding_mode: policyDraft.grounding_mode,
-        min_relevance_score: Number(policyDraft.min_relevance_score.toFixed(2)),
-        max_chunks_per_turn: policyDraft.max_chunks_per_turn,
-        custom_fallback_spoken: policyDraft.custom_fallback_spoken.trim() || null,
-      },
-    });
-  };
-
   const handleDeleteDocument = (documentId: string, documentName: string) => {
     setDeletingDocument({ id: documentId, name: documentName });
   };
 
   return (
     <div className="mx-auto max-w-7xl animate-in fade-in duration-500">
-      <header className="mb-8">
+      <header className="mb-6">
         <p className="text-sm font-semibold text-indigo-300">RETRIEVAL OPERATIONS</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Knowledge hub</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          Knowledge Hub
+        </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-          Stage operational knowledge for Grand Meridian, then test the exact retrieval guardrails used during voice calls.
+          Stage operational documents, cross-check multi-persona scoping, and test live
+          conversational retrieval guardrails for Grand Meridian.
         </p>
       </header>
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+
+      {/* 3-Tab Segmented Cockpit Navigation */}
+      <div className="mb-6 flex border-b border-slate-800 space-x-6">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'documents'}
+          onClick={() => setActiveTab('documents')}
+          className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
+            activeTab === 'documents'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          Documents & Access Matrix
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'playground'}
+          onClick={() => setActiveTab('playground')}
+          className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
+            activeTab === 'playground'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+          }`}
+        >
+          <FlaskConical className="h-4 w-4" />
+          Retrieval Playground
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'policies'}
+          onClick={() => setActiveTab('policies')}
+          className={`flex items-center gap-2 pb-3.5 text-sm font-semibold border-b-2 transition ${
+            activeTab === 'policies'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
+          }`}
+        >
+          <Settings2 className="h-4 w-4" />
+          Grounding Policies
+        </button>
+      </div>
+
+      {/* Tab 1: Documents & Scoping Matrix */}
+      {activeTab === 'documents' && (
         <div className="space-y-6">
           <Card className="p-5 sm:p-7">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="section-title">Add knowledge</h2>
+                <h2 className="section-title">Add Knowledge</h2>
                 <p className="section-copy">PDF, Markdown, or text · maximum 10 MB</p>
               </div>
               <UploadCloud className="h-5 w-5 text-indigo-300" />
@@ -241,23 +291,41 @@ export function KnowledgeHub() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               className={`mt-6 rounded-2xl border border-dashed p-8 text-center transition ${
-                isDragging ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-700 bg-slate-950/35'
+                isDragging
+                  ? 'border-indigo-400 bg-indigo-500/10'
+                  : 'border-slate-700 bg-slate-950/35'
               }`}
             >
               <FileUp className="mx-auto h-8 w-8 text-indigo-300" />
-              <p className="mt-4 text-sm font-semibold text-slate-100">Drop a policy document here</p>
+              <p className="mt-4 text-sm font-semibold text-slate-100">
+                Drop a policy document here
+              </p>
               <p className="mt-1 text-sm text-slate-500">or choose a file from your computer</p>
-              <Button variant="secondary" className="mt-5" onClick={() => inputRef.current?.click()}>
+              <Button
+                variant="secondary"
+                className="mt-5"
+                onClick={() => inputRef.current?.click()}
+              >
                 Browse files
               </Button>
-              <input ref={inputRef} className="hidden" type="file" accept={ACCEPTED_TYPES.join(',')} onChange={handleFileChange} />
+              <input
+                ref={inputRef}
+                className="hidden"
+                type="file"
+                accept={ACCEPTED_TYPES.join(',')}
+                onChange={handleFileChange}
+              />
             </div>
             {selectedFile && (
               <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-emerald-100">{selectedFile.name}</p>
-                    <p className="mt-1 text-xs text-emerald-200/65">{(selectedFile.size / 1024).toFixed(1)} KB · tenant: grand-meridian</p>
+                    <p className="truncate text-sm font-medium text-emerald-100">
+                      {selectedFile.name}
+                    </p>
+                    <p className="mt-1 text-xs text-emerald-200/65">
+                      {(selectedFile.size / 1024).toFixed(1)} KB · tenant: grand-meridian
+                    </p>
                   </div>
                   <Button disabled={upload.isPending} onClick={uploadFile}>
                     {upload.isPending ? 'Indexing…' : 'Index now'}
@@ -265,7 +333,9 @@ export function KnowledgeHub() {
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Agent access</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Agent access
+                  </p>
                   <div className="mt-3 space-y-2">
                     <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm text-slate-200">
                       <input
@@ -314,8 +384,14 @@ export function KnowledgeHub() {
               </div>
             )}
             {(fileError || upload.isError) && (
-              <p role="alert" className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100">
-                {fileError ?? (upload.error instanceof Error ? upload.error.message : 'The document could not be indexed.')}
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm leading-6 text-rose-100"
+              >
+                {fileError ??
+                  (upload.error instanceof Error
+                    ? upload.error.message
+                    : 'The document could not be indexed.')}
               </p>
             )}
             {upload.isSuccess && (
@@ -325,6 +401,7 @@ export function KnowledgeHub() {
               </p>
             )}
           </Card>
+
           <DocumentList
             documents={documents.data}
             isLoading={documents.isLoading}
@@ -338,6 +415,7 @@ export function KnowledgeHub() {
             onDeleteDocument={handleDeleteDocument}
             personaOptions={personaOptions}
           />
+
           {documents.data && (
             <KnowledgeMatrix
               documents={documents.data}
@@ -346,64 +424,26 @@ export function KnowledgeHub() {
             />
           )}
         </div>
-        <Card className="p-5 sm:p-7">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="section-title">Search tester</h2>
-              <p className="section-copy">Test tenant-scoped retrieval before a guest ever hears it.</p>
-            </div>
-            <FileSearch className="h-5 w-5 text-violet-300" />
-          </div>
-          <form className="mt-6" onSubmit={handleSearch}>
-            <label>
-              <span className="field-label">Ask the knowledge base</span>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  className="field"
-                  value={query}
-                  minLength={2}
-                  maxLength={500}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <Button type="submit" disabled={search.isPending || query.trim().length < 2}>
-                  {search.isPending ? 'Searching…' : <><Search className="h-4 w-4" />Test search</>}
-                </Button>
-              </div>
-            </label>
-            <label className="mt-4 block">
-              <span className="field-label">Simulate as voice agent</span>
-              <select
-                value={selectedPersonaKey}
-                onChange={(event) => setSelectedPersonaKey(event.target.value)}
-                className="field mt-2"
-              >
-                <option value="all">All Knowledge (Unrestricted)</option>
-                {personaOptions.map(({ key, name }) => (
-                  <option key={key} value={key}>{name}</option>
-                ))}
-              </select>
-            </label>
-          </form>
-          <div className="mt-7 border-t border-slate-800 pt-6">
-            <SearchResults
-              search={search}
-              selectedPersonaKey={selectedPersonaKey}
-              personaOptions={personaOptions}
-            />
-          </div>
-          <div className="mt-7 border-t border-slate-800 pt-6">
-            <GroundingPolicyPanel
-              activePersonaKey={activePersonaKey}
-              policyDraft={policyDraft}
-              onChangePolicy={setPolicyDraft}
-              onSavePolicy={savePersonaSettings}
-              isSaving={updatePersonaSettings.isPending}
-              isLoading={personaSettings.isPending}
-              personaOptions={personaOptions}
-            />
-          </div>
-        </Card>
-      </div>
+      )}
+
+      {/* Tab 2: Decoupled Retrieval Playground */}
+      {activeTab === 'playground' && (
+        <RetrievalPlayground
+          personaOptions={personaOptions}
+          onNavigateToDocuments={() => setActiveTab('documents')}
+        />
+      )}
+
+      {/* Tab 3: Persona Grounding Safety Policies */}
+      {activeTab === 'policies' && (
+        <GroundingPolicyWorkbench
+          personaOptions={personaOptions}
+          drafts={policyDrafts}
+          onUpdateDraft={updateDraftPolicy}
+        />
+      )}
+
+      {/* Manage Access Modal */}
       <DocumentAccessModal
         document={editingDocument}
         isOpen={Boolean(editingDocument)}
@@ -413,6 +453,7 @@ export function KnowledgeHub() {
         personaOptions={personaOptions}
       />
 
+      {/* Document Deletion Confirmation Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deletingDocument)}
         title={`Delete ${deletingDocument?.name ?? 'document'}?`}
@@ -432,6 +473,7 @@ export function KnowledgeHub() {
         onCancel={() => setDeletingDocument(null)}
       />
 
+      {/* Orphan Document Warning Confirmation Dialog */}
       <ConfirmDialog
         isOpen={Boolean(orphanConfirmDoc)}
         title="Make document inaccessible to all agents?"
