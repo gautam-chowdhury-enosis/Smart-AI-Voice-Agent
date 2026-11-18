@@ -15,10 +15,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const variants: Record<ButtonVariant, string> = {
-    primary: 'bg-indigo-500 text-white shadow-lg shadow-indigo-950/40 hover:bg-indigo-400',
-    secondary: 'border border-slate-700 bg-slate-800/80 text-slate-100 hover:border-slate-600 hover:bg-slate-700',
-    ghost: 'text-slate-400 hover:bg-slate-800 hover:text-white',
-    danger: 'bg-rose-500 text-white hover:bg-rose-400',
+    primary:
+      'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500 dark:bg-indigo-500 dark:shadow-indigo-950/40 dark:hover:bg-indigo-400',
+    secondary:
+      'border border-slate-300 bg-white text-slate-800 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:hover:border-slate-600 dark:hover:bg-slate-700',
+    ghost:
+      'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white',
+    danger: 'bg-rose-600 text-white hover:bg-rose-500 dark:bg-rose-500 dark:hover:bg-rose-400',
   };
   return (
     <button

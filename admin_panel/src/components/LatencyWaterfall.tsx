@@ -21,9 +21,9 @@ const segments = [
 export function LatencyWaterfall({ metrics, targetMs }: LatencyWaterfallProps) {
   if (!metrics) {
     return (
-      <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/35 px-6 text-center">
-        <Timer className="h-7 w-7 text-slate-500" aria-hidden="true" />
-        <p className="mt-3 text-sm font-semibold text-slate-200">Waiting for the first completed voice turn</p>
+      <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-6 text-center dark:border-slate-700 dark:bg-slate-950/35">
+        <Timer className="h-7 w-7 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+        <p className="mt-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Waiting for the first completed voice turn</p>
         <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">The waterfall will appear as soon as the pipeline records VAD, transcription, retrieval, model, and speech timings.</p>
       </div>
     );
@@ -35,12 +35,12 @@ export function LatencyWaterfall({ metrics, targetMs }: LatencyWaterfallProps) {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-3xl font-semibold tracking-tight text-white">{formatMilliseconds(metrics.total_ms)}</p>
-          <p className="mt-1 text-sm text-slate-400">End-to-end turn latency</p>
+          <p className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">{formatMilliseconds(metrics.total_ms)}</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">End-to-end turn latency</p>
         </div>
         <Badge tone={isOptimal ? 'success' : 'warning'}>{isOptimal ? `Optimal under ${targetMs} ms` : `Above ${targetMs} ms target`}</Badge>
       </div>
-      <div className="flex h-4 overflow-hidden rounded-full bg-slate-800" aria-label="Latency waterfall breakdown">
+      <div className="flex h-4 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" aria-label="Latency waterfall breakdown">
         {segments.map(({ key, label, color }) => {
           const value = metrics[key];
           return <div key={key} className={`${color} transition-all`} style={{ width: `${(value / total) * 100}%` }} title={`${label}: ${formatMilliseconds(value)}`} />;
@@ -50,11 +50,11 @@ export function LatencyWaterfall({ metrics, targetMs }: LatencyWaterfallProps) {
         {segments.map(({ key, label, color }) => (
           <div key={key}>
             <dt className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className={`h-2 w-2 rounded-full ${color}`} />{label}</dt>
-            <dd className="mt-1 text-sm font-semibold text-slate-100">{formatMilliseconds(metrics[key])}</dd>
+            <dd className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{formatMilliseconds(metrics[key])}</dd>
           </div>
         ))}
       </dl>
-      {!isOptimal && <p className="mt-5 flex gap-2 text-sm leading-6 text-amber-200"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />Review the largest stage before changing the selected provider or speech settings.</p>}
+      {!isOptimal && <p className="mt-5 flex gap-2 text-sm leading-6 text-amber-700 dark:text-amber-200"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />Review the largest stage before changing the selected provider or speech settings.</p>}
     </div>
   );
 }

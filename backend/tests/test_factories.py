@@ -53,40 +53,105 @@ class TestConfiguration(unittest.TestCase):
 
         persona = tenant.get_active_persona()
         self.assertEqual(persona.name, "Elena")
-        self.assertEqual(persona.voice.provider, "cartesia")
-        self.assertEqual(persona.voice.voice_id, "86e30c1d-714b-4074-a1f2-1cb6b552fb49")
+        self.assertEqual(persona.voice.provider, "kokoro")
+        self.assertEqual(persona.voice.voice_id, "af_sarah")
         self.assertEqual(persona.voice.speed, 1.00)
-        self.assertEqual(persona.llm.provider, "groq")
-        self.assertEqual(persona.llm.model, "openai/gpt-oss-120b")
+        self.assertEqual(persona.llm.provider, "ollama")
+        self.assertEqual(persona.llm.model, "llama3.2:3b")
         self.assertIn("hotel_check_availability", persona.tools)
+
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_default_hotel_services_initialize_with_zero_cloud_keys(
+        self, mock_kokoro_service, mock_openai_service
+    ):
+        """Validates default hotel persona services can be instantiated with zero cloud keys."""
+        mock_openai_service.return_value = MagicMock()
+        mock_kokoro_service.return_value = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "pipecat.services.openai.llm": MagicMock(OpenAILLMService=mock_openai_service),
+                "pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service),
+            },
+        ):
+            tenant = load_tenant_config("default_hotel.yaml")
+            persona = tenant.get_active_persona()
+            settings = AppSettings(_env_file=None)
+
+            llm_service = create_llm_service(settings, override=persona.llm)
+            tts_service = create_tts_service(settings, override=persona.voice)
+
+            self.assertIsNotNone(llm_service)
+            self.assertIsNotNone(tts_service)
+            mock_openai_service.assert_called_once_with(
+                api_key="ollama",
+                base_url=settings.ollama_base_url,
+                model="llama3.2:3b",
+            )
+            mock_kokoro_service.assert_called_once_with(
+                voice_id="af_sarah",
+                speed=1.00,
+            )
 
 
 class TestLLMFactory(unittest.TestCase):
     """Tests for LLM Service Factory."""
 
-    def test_missing_groq_api_key_raises_error(self):
-        """Requesting Groq without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, groq_api_key=None)
-        override = LLMSettings(provider="groq")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("GROQ_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_groq_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting Groq without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
 
-    def test_missing_openai_api_key_raises_error(self):
-        """Requesting OpenAI without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, openai_api_key=None)
-        override = LLMSettings(provider="openai")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("OPENAI_API_KEY is required", str(ctx.exception))
+        settings = AppSettings(_env_file=None, groq_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="groq", model="openai/gpt-oss-120b")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("GROQ_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
 
-    def test_missing_gemini_api_key_raises_error(self):
-        """Requesting Gemini without an API key must raise ProviderConfigurationError."""
-        settings = AppSettings(_env_file=None, gemini_api_key=None)
-        override = LLMSettings(provider="gemini")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_llm_service(settings, override=override)
-        self.assertIn("GEMINI_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_openai_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting OpenAI without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
+
+        settings = AppSettings(_env_file=None, openai_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="openai", model="gpt-4o-mini")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("OPENAI_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
+
+    @patch("pipecat.services.openai.llm.OpenAILLMService", create=True)
+    def test_missing_gemini_api_key_falls_back_to_ollama(self, mock_openai_service):
+        """Requesting Gemini without an API key logs warning and falls back to Ollama."""
+        mock_instance = MagicMock()
+        mock_openai_service.return_value = mock_instance
+
+        settings = AppSettings(_env_file=None, gemini_api_key=None, llm_provider="ollama")
+        override = LLMSettings(provider="gemini", model="gemini-2.0-flash")
+        with self.assertLogs("backend.engine.providers.llm_factory", level="WARNING") as log:
+            service = create_llm_service(settings, override=override)
+        self.assertEqual(service, mock_instance)
+        self.assertTrue(any("GEMINI_API_KEY is missing" in m for m in log.output))
+        mock_openai_service.assert_called_once_with(
+            api_key="ollama",
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
 
     def test_unsupported_provider_raises_error(self):
         """Requesting an invalid provider must raise UnsupportedProviderError."""
@@ -169,13 +234,50 @@ class TestSTTFactory(unittest.TestCase):
 class TestTTSFactory(unittest.TestCase):
     """Tests for TTS Service Factory."""
 
-    def test_missing_cartesia_key_raises_error(self):
-        """Cartesia requires CARTESIA_API_KEY."""
-        settings = AppSettings(_env_file=None, cartesia_api_key=None)
-        override = VoiceSettings(provider="cartesia")
-        with self.assertRaises(ProviderConfigurationError) as ctx:
-            create_tts_service(settings, override=override)
-        self.assertIn("CARTESIA_API_KEY is required", str(ctx.exception))
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_missing_cartesia_key_falls_back_to_kokoro(self, mock_kokoro_service):
+        """Cartesia without an API key logs warning and falls back to Kokoro."""
+        mock_instance = MagicMock()
+        mock_kokoro_service.return_value = mock_instance
+
+        with patch.dict(
+            sys.modules,
+            {"pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service)},
+        ):
+            settings = AppSettings(_env_file=None, cartesia_api_key=None, tts_provider="kokoro")
+            override = VoiceSettings(
+                provider="cartesia",
+                voice_id="86e30c1d-714b-4074-a1f2-1cb6b552fb49",
+                fallback_voice_id="af_bella",
+                speed=1.00,
+            )
+            with self.assertLogs("backend.engine.providers.tts_factory", level="WARNING") as log:
+                service = create_tts_service(settings, override=override)
+            self.assertEqual(service, mock_instance)
+            self.assertTrue(any("CARTESIA_API_KEY is missing" in m for m in log.output))
+            mock_kokoro_service.assert_called_once_with(voice_id="af_bella", speed=1.00)
+
+    @patch("pipecat.services.kokoro.tts.KokoroTTSService", create=True)
+    def test_missing_elevenlabs_key_falls_back_to_kokoro(self, mock_kokoro_service):
+        """ElevenLabs without an API key logs warning and falls back to Kokoro."""
+        mock_instance = MagicMock()
+        mock_kokoro_service.return_value = mock_instance
+
+        with patch.dict(
+            sys.modules,
+            {"pipecat.services.kokoro.tts": MagicMock(KokoroTTSService=mock_kokoro_service)},
+        ):
+            settings = AppSettings(_env_file=None, tts_provider="kokoro")
+            override = VoiceSettings(
+                provider="elevenlabs",
+                voice_id="21m00Tcm4TlvDq8ikWAM",
+                fallback_voice_id="af_sarah",
+            )
+            with self.assertLogs("backend.engine.providers.tts_factory", level="WARNING") as log:
+                service = create_tts_service(settings, override=override)
+            self.assertEqual(service, mock_instance)
+            self.assertTrue(any("ELEVENLABS_API_KEY is missing" in m for m in log.output))
+            mock_kokoro_service.assert_called_once_with(voice_id="af_sarah", speed=1.00)
 
     def test_kokoro_default_creation(self):
         """Kokoro TTS instantiates with voice_id and speed."""
