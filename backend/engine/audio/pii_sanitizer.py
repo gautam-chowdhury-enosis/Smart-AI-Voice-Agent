@@ -47,6 +47,26 @@ CVV_REGEX = re.compile(
 SSN_REGEX = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 EIN_REGEX = re.compile(r"\b\d{2}-\d{7}\b")
 
+# Prompt injection and override markers (SEC-09)
+INJECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", re.IGNORECASE),
+    re.compile(r"\[developer\]", re.IGNORECASE),
+    re.compile(r"<\s*system\s*>.*?<\s*/\s*system\s*>", re.IGNORECASE | re.DOTALL),
+    re.compile(r"<\s*system\s*>", re.IGNORECASE),
+    re.compile(r"\bsystem\s*:\s*", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(a\s+)?different", re.IGNORECASE),
+    re.compile(r"(switch|enter)\s+(to\s+)?(unrestricted|jailbreak|developer)\s+mode", re.IGNORECASE),
+]
+
+
+def strip_injection_markers(text: str) -> str:
+    """Remove known prompt injection override patterns from user input."""
+    if not text:
+        return text
+    for pattern in INJECTION_PATTERNS:
+        text = pattern.sub("[INPUT FILTERED]", text)
+    return text
+
 
 def is_luhn_valid(number_str: str) -> bool:
     """Verify Luhn checksum for a numeric sequence."""
@@ -93,12 +113,17 @@ def sanitize_pii_text(text: str) -> str:
     return cleaned
 
 
+def sanitize_user_input(text: str) -> str:
+    """Sanitize untrusted user input by stripping PII and prompt injection markers."""
+    return strip_injection_markers(sanitize_pii_text(text))
+
+
 class PIISanitizerProcessor(FrameProcessor):
-    """Pipeline processor that sanitizes PII from live transcriptions and text frames."""
+    """Pipeline processor that sanitizes PII and injection markers from live transcriptions and text frames."""
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, (TranscriptionFrame, InterimTranscriptionFrame, TextFrame)):
             if getattr(frame, "text", None):
-                frame.text = sanitize_pii_text(frame.text)
+                frame.text = sanitize_user_input(frame.text)
         await self.push_frame(frame, direction)
