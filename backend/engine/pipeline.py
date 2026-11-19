@@ -342,8 +342,26 @@ def build_mcp_function_schemas(
         def _bind(name: str):
             async def _handler(params: FunctionCallParams) -> None:
                 call_args = dict(params.arguments)
-                result = await mcp_hub.call_tool(name, call_args, persona=persona_key)
-                emit_generative_ui_events(connection, name, call_args, result)
+                try:
+                    result = await mcp_hub.call_tool(name, call_args, persona=persona_key)
+                except Exception as exc:
+                    logger.exception(
+                        "Error executing MCP tool '%s' with args %s: %s", name, call_args, exc
+                    )
+                    result = {
+                        "status": "error",
+                        "message": (
+                            f"The {name.replace('_', ' ')} request could not be completed right now. "
+                            "Please inform the guest calmly and offer to try again."
+                        ),
+                    }
+
+                try:
+                    emit_generative_ui_events(connection, name, call_args, result)
+                except Exception as ui_exc:
+                    logger.warning("Generative UI dispatch failed for tool '%s': %s", name, ui_exc)
+
+                # MANDATORY: result_callback MUST always be called so Pipecat LLM can complete the turn
                 await params.result_callback(result)
 
             return _handler

@@ -27,8 +27,10 @@ from backend.engine.pipeline import (
     ConsumerVoicePipeline,
     DataChannelBridgeProcessor,
     SpeechNormalizerProcessor,
+    build_mcp_function_schemas,
     emit_generative_ui_events,
 )
+from backend.mcp.client import ToolIsolationError, ToolTimeoutError
 from backend.rag.retriever import RAGContextFrameProcessor, RAGContextRetriever
 from backend.rag.vector_store import MemoryVectorStore
 
@@ -482,6 +484,89 @@ class TestVoiceOfferResponseContract(unittest.TestCase):
         )
         self.assertTrue(response.sdp.endswith("\r\n"))
         self.assertFalse(response.sdp.endswith("\r\n\r\n"))
+
+
+class TestToolExecutionExceptionTrapping(unittest.TestCase):
+    """Issue #02: Trap tool execution exceptions to prevent Pipecat worker hang."""
+
+    def setUp(self) -> None:
+        self.mcp_hub = MagicMock()
+        self.mcp_hub.list_tools.return_value = [
+            {
+                "name": "hotel_check_availability",
+                "description": "Check room availability",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"date_in": {"type": "string"}, "date_out": {"type": "string"}},
+                    "required": ["date_in", "date_out"],
+                },
+            }
+        ]
+        self.connection = FakeConnection()
+
+    def test_tool_runtime_exception_is_trapped_and_callbacks_with_error(self) -> None:
+        """When a tool raises a general exception, result_callback receives an error dict."""
+        self.mcp_hub.call_tool = AsyncMock(side_effect=RuntimeError("Database lock failed"))
+        schemas = build_mcp_function_schemas(self.mcp_hub, "hotel_booking_specialist", self.connection)
+        self.assertEqual(len(schemas), 1)
+
+        handler = schemas[0].handler
+        callback = AsyncMock()
+        params = MagicMock(arguments={"date_in": "2026-10-12", "date_out": "2026-10-15"}, result_callback=callback)
+
+        asyncio.run(handler(params))
+
+        callback.assert_awaited_once()
+        result = callback.call_args[0][0]
+        self.assertEqual(result["status"], "error")
+        self.assertIn("hotel check availability request could not be completed", result["message"])
+
+    def test_tool_timeout_error_is_trapped(self) -> None:
+        """ToolTimeoutError is trapped and does not crash the worker."""
+        self.mcp_hub.call_tool = AsyncMock(side_effect=ToolTimeoutError("MCP tool timed out after 3.0s"))
+        schemas = build_mcp_function_schemas(self.mcp_hub, "hotel_booking_specialist", self.connection)
+
+        handler = schemas[0].handler
+        callback = AsyncMock()
+        params = MagicMock(arguments={"date_in": "2026-10-12", "date_out": "2026-10-15"}, result_callback=callback)
+
+        asyncio.run(handler(params))
+
+        callback.assert_awaited_once()
+        result = callback.call_args[0][0]
+        self.assertEqual(result["status"], "error")
+
+    def test_tool_isolation_error_is_trapped(self) -> None:
+        """ToolIsolationError is trapped and does not crash the worker."""
+        self.mcp_hub.call_tool = AsyncMock(
+            side_effect=ToolIsolationError("Tool hotel_check_availability is not permitted for dining persona")
+        )
+        schemas = build_mcp_function_schemas(self.mcp_hub, "restaurant_dining", self.connection)
+
+        handler = schemas[0].handler
+        callback = AsyncMock()
+        params = MagicMock(arguments={"date_in": "2026-10-12", "date_out": "2026-10-15"}, result_callback=callback)
+
+        asyncio.run(handler(params))
+
+        callback.assert_awaited_once()
+        result = callback.call_args[0][0]
+        self.assertEqual(result["status"], "error")
+
+    def test_generative_ui_dispatch_failure_does_not_break_result_callback(self) -> None:
+        """Even if generative UI dispatch fails, result_callback is still invoked."""
+        self.mcp_hub.call_tool = AsyncMock(return_value={"status": "available", "rooms": ["R-101"]})
+        broken_connection = MagicMock()
+        broken_connection.send_app_message.side_effect = Exception("DataChannel crashed")
+
+        schemas = build_mcp_function_schemas(self.mcp_hub, "hotel_booking_specialist", broken_connection)
+        handler = schemas[0].handler
+        callback = AsyncMock()
+        params = MagicMock(arguments={"date_in": "2026-10-12", "date_out": "2026-10-15"}, result_callback=callback)
+
+        asyncio.run(handler(params))
+
+        callback.assert_awaited_once_with({"status": "available", "rooms": ["R-101"]})
 
 
 if __name__ == "__main__":
