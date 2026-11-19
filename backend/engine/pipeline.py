@@ -42,7 +42,10 @@ from pipecat.workers.runner import WorkerRunner
 from backend.api.knowledge import get_knowledge_hub
 from backend.config.settings import AppSettings, TenantConfig, get_settings
 from backend.engine.audio.normalizer import normalize_speech_text
-from backend.engine.audio.pii_sanitizer import PIISanitizerProcessor, sanitize_pii_text
+from backend.engine.audio.pii_sanitizer import (
+    PIISanitizerProcessor,
+    sanitize_user_input,
+)
 from backend.engine.providers.llm_factory import create_llm_service
 from backend.engine.providers.stt_factory import create_stt_service
 from backend.engine.providers.tts_factory import create_tts_service
@@ -481,7 +484,7 @@ class ConsumerVoicePipeline:
 
     async def inject_user_text(self, text: str) -> None:
         """Inject typed text from DualInputBar directly into LLM turn context."""
-        cleaned = sanitize_pii_text(text.strip())
+        cleaned = sanitize_user_input(text.strip())
         if not cleaned:
             return
         self.touch_activity()
@@ -495,8 +498,8 @@ class ConsumerVoicePipeline:
     async def inject_touch_override(self, room_id: str, label: str) -> None:
         """Inject client touch selection as non-committing conversational context."""
         self.touch_activity()
-        cleaned_room_id = sanitize_pii_text(room_id.strip())
-        cleaned_label = sanitize_pii_text(label.strip())
+        cleaned_room_id = sanitize_user_input(room_id.strip())
+        cleaned_label = sanitize_user_input(label.strip())
         hint = (
             f"[Guest tapped '{cleaned_label}' (Room ID: {cleaned_room_id}) on screen. "
             "Acknowledge that you see their selection, describe its highlights, "
