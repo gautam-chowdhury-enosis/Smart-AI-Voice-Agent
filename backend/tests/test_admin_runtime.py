@@ -39,6 +39,9 @@ class DurableMemoryVectorStore(BaseVectorStore):
     def delete_by_doc(self, doc_name: str) -> int:
         return self._memory.delete_by_doc(doc_name)
 
+    def delete_by_document_id(self, document_id: str) -> int:
+        return self._memory.delete_by_document_id(document_id)
+
     def clear(self) -> None:
         self._memory.clear()
 

@@ -51,6 +51,13 @@ export interface CaptionLine {
   createdAt: number;
 }
 
+export interface KnowledgeCitationModel {
+  document_id: string;
+  document_name: string;
+  excerpt: string;
+  relevance_score: number;
+}
+
 export type ClientUiEvent =
   | { type: 'client_touch_override'; room_id: string; label: string }
   | { type: 'text_message'; text: string }
@@ -61,6 +68,7 @@ export type ClientUiEvent =
 export type ServerUiEvent =
   | { type: 'session_ready'; agent_name: string; message: string; confirmation_required: boolean }
   | { type: 'caption'; speaker: 'agent' | 'guest'; text: string; is_final?: boolean }
+  | { type: 'knowledge_citation'; citation: KnowledgeCitationModel }
   | { type: 'room_card'; room: RoomCardModel }
   | { type: 'booking_stepper'; booking: BookingStepState }
   | { type: 'checkout_prompt'; amount: number; currency: string; description: string }
@@ -85,6 +93,24 @@ export function parseServerUiEvent(value: unknown): ServerUiEvent | null {
   }
   if (type === 'caption' && isSpeaker(value.speaker) && isString(value.text)) {
     return { type, speaker: value.speaker, text: value.text, is_final: value.is_final === true };
+  }
+  if (type === 'knowledge_citation') {
+    const citation = isKnowledgeCitationModel(value.citation)
+      ? value.citation
+      : isKnowledgeCitationModel({
+          document_id: value.document_id,
+          document_name: value.document_name,
+          excerpt: value.excerpt,
+          relevance_score: value.relevance_score,
+        })
+        ? {
+            document_id: value.document_id as string,
+            document_name: value.document_name as string,
+            excerpt: value.excerpt as string,
+            relevance_score: value.relevance_score as number,
+          }
+        : null;
+    if (citation) return { type, citation };
   }
   if (type === 'room_card' && isRoomCard(value.room)) return { type, room: value.room };
   if (type === 'booking_stepper' && isBookingState(value.booking)) return { type, booking: value.booking };
@@ -117,6 +143,16 @@ function isNumber(value: unknown): value is number {
 
 function isSpeaker(value: unknown): value is 'agent' | 'guest' {
   return value === 'agent' || value === 'guest';
+}
+
+function isKnowledgeCitationModel(value: unknown): value is KnowledgeCitationModel {
+  if (!isRecord(value)) return false;
+  return (
+    isString(value.document_id) &&
+    isString(value.document_name) &&
+    isString(value.excerpt) &&
+    isNumber(value.relevance_score)
+  );
 }
 
 function isRoomCard(value: unknown): value is RoomCardModel {

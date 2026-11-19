@@ -57,12 +57,65 @@ export interface DashboardResponse {
   knowledge_documents: number;
 }
 
+export type KnowledgeDocumentScope = 'tenant_wide' | 'persona_specific';
+export type KnowledgeDocumentStatus = 'indexed' | 'pending' | 'indexing' | 'failed' | 'deleting';
+export type KnowledgeIngestionStatus = 'pending' | 'indexing' | 'indexed' | 'failed' | 'deleting';
+
 export interface KnowledgeDocument {
+  id: string;
   name: string;
   tenant_id: string;
   chunks_indexed: number;
   uploaded_at: string;
-  status: 'indexed';
+  status: KnowledgeDocumentStatus;
+  is_enabled: boolean;
+  scope: KnowledgeDocumentScope;
+  assigned_personas: string[];
+  version: number;
+  ingestion_status: KnowledgeIngestionStatus;
+  ingestion_error?: string | null;
+}
+
+export interface DocumentChunk {
+  id: string;
+  text: string;
+  metadata: Record<string, unknown>;
+  token_count?: number;
+}
+
+export interface PersonaVoiceUpdate {
+  voice_id: string;
+  provider?: TTSProvider;
+  speed?: number;
+  pitch?: number;
+}
+
+export interface PersonaVoiceUpdateResponse {
+  persona_key: string;
+  voice_id: string;
+  provider: TTSProvider;
+  gender: 'female' | 'male' | 'neutral';
+  accent: string;
+  recommended_speed: number;
+  description: string;
+  role_fit: string[];
+}
+
+export interface PersonaOption {
+  key: string;
+  name: string;
+}
+
+export type GroundingMode = 'knowledge_strict' | 'prompt_only' | 'hybrid_balanced' | 'knowledge_first';
+
+export interface PersonaKnowledgeSettings {
+  tenant_id: string;
+  persona_key: string;
+  grounding_mode: GroundingMode;
+  min_relevance_score: number;
+  max_chunks_per_turn: number;
+  custom_fallback_spoken: string | null;
+  updated_at: string | null;
 }
 
 export interface KnowledgeSearchChunk {

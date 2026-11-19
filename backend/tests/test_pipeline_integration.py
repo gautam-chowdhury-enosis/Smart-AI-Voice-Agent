@@ -28,6 +28,7 @@ from pipecat.frames.frames import (
     LLMRunFrame,
     TextFrame,
     TranscriptionFrame,
+    TTSSpeakFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
@@ -91,8 +92,13 @@ class ScriptedLLMService(FrameProcessor):
 class PassThroughSpeechProcessor(FrameProcessor):
     """Keep pipeline tests independent from local speech model downloads."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.frames: list[Frame] = []
+
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
+        self.frames.append(frame)
         await self.push_frame(frame, direction)
 
 
@@ -330,17 +336,35 @@ class TestLivePipelineStartup(unittest.TestCase):
                 DocumentChunk(
                     id="uploaded-spa-hours",
                     text="The Meridian Wellness Spa opens at 8:00 AM daily.",
-                    metadata={"doc_name": "spa-hours.md", "tenant_id": "grand-meridian"},
+                    metadata={
+                        "document_id": "uploaded-spa-hours",
+                        "doc_name": "spa-hours.md",
+                        "tenant_id": "grand-meridian",
+                    },
                 ),
                 DocumentChunk(
                     id="uploaded-tesla-facts",
                     text="Tesla's headquarters is in Austin, Texas.",
-                    metadata={"doc_name": "tesla-facts.md", "tenant_id": "grand-meridian"},
+                    metadata={
+                        "document_id": "uploaded-tesla-facts",
+                        "doc_name": "tesla-facts.md",
+                        "tenant_id": "grand-meridian",
+                    },
                 ),
             ]
         )
         store.search = Mock(wraps=store.search)
-        retriever = RAGContextRetriever(vector_store=store, similarity_threshold=0.1)
+        retriever = RAGContextRetriever(
+            vector_store=store,
+            similarity_threshold=0.1,
+            document_ids_provider=lambda: ["uploaded-spa-hours", "uploaded-tesla-facts"],
+            persona_settings_provider=lambda: Mock(
+                grounding_mode="hybrid_balanced",
+                min_relevance_score=0.1,
+                max_chunks_per_turn=2,
+                custom_fallback_spoken=None,
+            ),
+        )
 
         async def scenario() -> None:
             connection = RecordingConnection()
@@ -429,6 +453,62 @@ class TestLivePipelineStartup(unittest.TestCase):
                 )
                 self.assertIn("including topics outside hotel services", system_prompt)
                 self.assertIn("do not decline or redirect", system_prompt)
+            finally:
+                await session.stop()
+
+        asyncio.run(scenario())
+
+    def test_strict_typed_no_match_uses_tts_without_running_llm(self) -> None:
+        """A strict typed turn speaks its fallback through TTS without invoking the LLM."""
+        scripted = ScriptedLLMService("This should not be generated.")
+        tts = PassThroughSpeechProcessor()
+        settings = Mock(
+            grounding_mode="knowledge_strict",
+            min_relevance_score=0.65,
+            max_chunks_per_turn=2,
+            custom_fallback_spoken=None,
+        )
+        hub = Mock()
+        hub.get_persona_settings.return_value = settings
+        retriever = RAGContextRetriever(
+            vector_store=MemoryVectorStore(),
+            document_ids_provider=lambda: ["assigned-document"],
+            persona_settings_provider=lambda: settings,
+        )
+
+        async def scenario() -> None:
+            connection = RecordingConnection()
+            tenant = load_tenant_config()
+            with (
+                patch("backend.engine.pipeline.get_knowledge_hub", return_value=hub),
+                patch("backend.engine.pipeline.create_llm_service", return_value=scripted),
+                patch(
+                    "backend.engine.pipeline.create_stt_service",
+                    return_value=PassThroughSpeechProcessor(),
+                ),
+                patch("backend.engine.pipeline.create_tts_service", return_value=tts),
+            ):
+                session = await create_consumer_voice_pipeline(
+                    connection=connection,
+                    tenant=tenant,
+                    persona_key="hotel_booking_specialist",
+                    settings=AppSettings(),
+                    knowledge_retriever=retriever,
+                )
+
+            try:
+                await session.start()
+                initial_llm_runs = scripted.run_requests
+                await session.inject_user_text("What are the pool hours?")
+                tts_ready = await wait_until(
+                    lambda: any(isinstance(frame, TTSSpeakFrame) for frame in tts.frames)
+                )
+
+                self.assertTrue(tts_ready, "Strict fallback should reach the TTS processor")
+                self.assertEqual(scripted.run_requests, initial_llm_runs)
+                fallback_captions = captions_for(connection.sent_messages, "agent")
+                self.assertTrue(fallback_captions)
+                self.assertIn("don't have that specific information", fallback_captions[-1]["text"])
             finally:
                 await session.stop()
 

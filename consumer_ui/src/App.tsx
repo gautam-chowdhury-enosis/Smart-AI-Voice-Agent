@@ -10,7 +10,7 @@ import { BookingStepper } from './components/generative/BookingStepper';
 import { CheckoutModal } from './components/generative/CheckoutModal';
 import { RoomCard } from './components/generative/RoomCard';
 import { useVoiceSession } from './hooks/useVoiceSession';
-import type { BookingStepState, CaptionLine, RoomCardModel, ServerUiEvent } from './types';
+import type { BookingStepState, CaptionLine, KnowledgeCitationModel, RoomCardModel, ServerUiEvent } from './types';
 
 const tenantFromUrl = new URLSearchParams(window.location.search).get('tenant') ?? 'grand-meridian';
 const embedded = new URLSearchParams(window.location.search).get('embed') === '1';
@@ -19,6 +19,7 @@ const embedded = new URLSearchParams(window.location.search).get('embed') === '1
 export function App() {
   const captionSequence = useRef(0);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
+  const [knowledgeCitation, setKnowledgeCitation] = useState<KnowledgeCitationModel | null>(null);
   const [rooms, setRooms] = useState<RoomCardModel[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingStepState | null>(null);
@@ -34,6 +35,11 @@ export function App() {
     if (event.type === 'caption') {
       captionSequence.current += 1;
       setCaptions((current) => [...current.slice(-23), { id: `caption-${captionSequence.current}`, speaker: event.speaker, text: event.text, isFinal: event.is_final ?? true, createdAt: Date.now() }]);
+      return;
+    }
+    if (event.type === 'knowledge_citation') {
+      setKnowledgeCitation(event.citation);
+      setNotice(`Verified source: ${event.citation.document_name}`);
       return;
     }
     if (event.type === 'room_card') {
@@ -118,7 +124,7 @@ export function App() {
                 </div>
                 {voice.errorMessage && <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm leading-5 text-rose-800" role="alert"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{voice.errorMessage}</div>}
                 {notice && <div className="mt-4 flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50/80 px-3.5 py-3 text-sm leading-5 text-violet-900"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />{notice}</div>}
-                <div className="mt-5"><LiveCaptions captions={captions} /></div>
+                <div className="mt-5"><LiveCaptions captions={captions} citation={knowledgeCitation} /></div>
                 <div className="mt-5"><DualInputBar onPushToTalk={voice.setPushToTalk} onSendText={sendText} status={voice.status} /></div>
               </div>
             </div>

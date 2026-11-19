@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -239,6 +240,7 @@ class KnowledgeSearchRequest(StrictSchema):
 
     query: str = Field(min_length=2, max_length=500)
     tenant_id: str = Field(default="grand-meridian", min_length=1, max_length=64)
+    persona_key: str | None = None
 
 
 class KnowledgeSearchResponse(StrictSchema):
@@ -249,12 +251,80 @@ class KnowledgeSearchResponse(StrictSchema):
     fallback_spoken: str | None = None
 
 
+class DocumentScope(StrEnum):
+    """Document visibility scope across tenant voice personas."""
+
+    TENANT_WIDE = "tenant_wide"
+    PERSONA_SPECIFIC = "persona_specific"
+
+
+class GroundingMode(StrEnum):
+    """Response sourcing directive configuring how the model answers guest turns."""
+
+    KNOWLEDGE_STRICT = "knowledge_strict"
+    PROMPT_ONLY = "prompt_only"
+    HYBRID_BALANCED = "hybrid_balanced"
+    KNOWLEDGE_FIRST = "knowledge_first"
+
+
+class IngestionStatus(StrEnum):
+    """Lifecycle status of document ingestion into vector storage."""
+
+    PENDING = "pending"
+    INDEXING = "indexing"
+    INDEXED = "indexed"
+    FAILED = "failed"
+    DELETING = "deleting"
+
+
 class KnowledgeDocumentResponse(StrictSchema):
     """Knowledge document metadata retained by the local admin service."""
 
+    id: str | None = None
     name: str
     tenant_id: str
     chunks_indexed: int = Field(ge=0)
     uploaded_at: datetime
-    status: Literal["indexed"]
+    status: Literal["indexed", "pending", "indexing", "failed", "deleting"] = "indexed"
+    is_enabled: bool = True
+    scope: DocumentScope = DocumentScope.TENANT_WIDE
+    assigned_personas: list[str] = Field(default_factory=list)
+    version: int = Field(default=1, ge=1)
+    ingestion_status: IngestionStatus = IngestionStatus.INDEXED
+    ingestion_error: str | None = None
+
+
+class DocumentAssignmentUpdate(StrictSchema):
+    """Payload to assign or reassign document visibility to voice personas."""
+
+    scope: DocumentScope
+    assigned_personas: list[str] = Field(default_factory=list)
+
+
+class DocumentStatusUpdate(StrictSchema):
+    """Payload to soft-enable or soft-disable a document for voice retrieval."""
+
+    is_enabled: bool
+
+
+class PersonaKnowledgeSettingsResponse(StrictSchema):
+    """Grounding policy and threshold settings for one voice persona."""
+
+    tenant_id: str
+    persona_key: str
+    grounding_mode: GroundingMode = GroundingMode.HYBRID_BALANCED
+    min_relevance_score: float = Field(default=0.65, ge=0.0, le=1.0)
+    max_chunks_per_turn: int = Field(default=3, ge=1, le=5)
+    custom_fallback_spoken: str | None = None
+    updated_at: datetime | None = None
+
+
+class PersonaKnowledgeSettingsUpdate(StrictSchema):
+    """Update payload for configuring a persona's knowledge grounding policy."""
+
+    grounding_mode: GroundingMode = GroundingMode.HYBRID_BALANCED
+    min_relevance_score: float = Field(default=0.65, ge=0.0, le=1.0)
+    max_chunks_per_turn: int = Field(default=3, ge=1, le=5)
+    custom_fallback_spoken: str | None = None
+
 
