@@ -9,6 +9,25 @@ from pathlib import Path
 from typing import Any, Generator
 from uuid import uuid4
 
+try:
+    # The official Docker image (Dockerfile.backend) installs this driver, so a
+    # DB_ENCRYPTION_KEY there enables encryption instead of failing at startup.
+    # Custom images must install sqlcipher3 themselves or rely on volume-level
+    # encryption.
+    import sqlcipher3 as sqlite_driver  # type: ignore[import-untyped]
+    HAS_SQLCIPHER = True
+except ImportError:
+    try:
+        from pysqlcipher3 import dbapi2 as sqlite_driver  # type: ignore[import-untyped]
+        HAS_SQLCIPHER = True
+    except ImportError:
+        import sqlite3 as sqlite_driver  # type: ignore[no-redef]
+        HAS_SQLCIPHER = False
+
+
+class DatabaseEncryptionError(RuntimeError):
+    """Raised when database encryption fails or is unavailable."""
+
 SEED_ROOMS: tuple[tuple[str, str, float], ...] = (
     ("R-101", "standard", 120.0),
     ("R-201", "deluxe", 180.0),
@@ -39,19 +58,32 @@ def _parse_iso_date(value: str) -> date:
 
 
 class HotelStore:
-    """SQLite-backed hotel operations store with ACID writes."""
+    """SQLite-backed hotel operations store with ACID writes and optional SQLCipher encryption."""
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, encryption_key: str | None = None) -> None:
         self.db_path = Path(db_path)
+        self.encryption_key = encryption_key
         if str(self.db_path) != ":memory:":
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 
     @contextmanager
-    def connect(self) -> Generator[sqlite3.Connection, None, None]:
+    def connect(self) -> Generator[Any, None, None]:
         """Yield a transactional connection that commits on success."""
-        connection = sqlite3.connect(self.db_path)
-        connection.row_factory = sqlite3.Row
+        connection = sqlite_driver.connect(self.db_path)
+        connection.row_factory = sqlite_driver.Row
+
+        if self.encryption_key:
+            safe_key = self.encryption_key.replace("'", "''")
+            connection.execute(f"PRAGMA key = '{safe_key}'")
+            cipher_check = connection.execute("PRAGMA cipher_version").fetchall()
+            if not cipher_check or not cipher_check[0] or not cipher_check[0][0]:
+                connection.close()
+                raise DatabaseEncryptionError(
+                    "DB_ENCRYPTION_KEY was specified, but neither sqlcipher3 nor an active SQLCipher backend is available. "
+                    "Install sqlcipher3 (the standard Docker image includes it) or configure volume-level storage encryption."
+                )
+
         connection.execute("PRAGMA foreign_keys = ON")
         try:
             yield connection

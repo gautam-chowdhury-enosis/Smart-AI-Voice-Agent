@@ -2,6 +2,11 @@
 
 Redacts credit card primary account numbers (PAN), CVVs, and government identifiers
 before speech data flows into LLM context, DataChannel captions, or telemetry.
+
+LIMITATIONS: this is a best-effort, pattern-based heuristic, not a security boundary.
+It covers a fixed set of phrasings, so paraphrased overrides and obfuscated digits
+reach the LLM unchanged. Tool allowlists, confirmation rules and the system prompt
+remain the enforcing controls; LLM output is always untrusted input.
 """
 
 from __future__ import annotations
@@ -46,6 +51,51 @@ CVV_REGEX = re.compile(
 # Match US SSN (123-45-6789)
 SSN_REGEX = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 EIN_REGEX = re.compile(r"\b\d{2}-\d{7}\b")
+
+# Prompt injection and override markers (SEC-09) — a heuristic, not an
+# authorization control (see the module docstring).
+INJECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"(?:ignore|disregard)\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+"
+        r"(instructions?|prompts?|rules?|messages?)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"forget\s+(all\s+)?(of\s+)?(your\s+|the\s+|any\s+)?"
+        r"(previous\s+|prior\s+|earlier\s+)?(instructions?|rules?|prompts?|system\s+prompt)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"override\s+(the\s+|your\s+)?(system|developer|safety)\s+(prompt|instructions?|rules?)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(reveal|print|show|repeat)\s+(me\s+)?"
+        r"(?:your\s+((hidden|initial|system|original)\s+)*(prompt|instructions?|rules?)"
+        r"|the\s+(system|hidden|initial|original)\s+(prompt|instructions?|rules?))",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\[\s*developer\s*\]", re.IGNORECASE),
+    re.compile(r"<\s*system\s*>.*?<\s*/\s*system\s*>", re.IGNORECASE | re.DOTALL),
+    re.compile(r"<\s*system\s*>", re.IGNORECASE),
+    re.compile(r"\bsystem\s*:\s*", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(a\s+)?different", re.IGNORECASE),
+    re.compile(r"you\s+are\s+no\s+longer\s+(bound|restricted|limited|required)", re.IGNORECASE),
+    re.compile(r"(switch|enter)\s+(to\s+)?(unrestricted|jailbreak|developer)\s+mode", re.IGNORECASE),
+    re.compile(
+        r"(act|behave)\s+as\s+if\s+you\s+(have|had)\s+no\s+(restrictions?|rules?|limits?)",
+        re.IGNORECASE,
+    ),
+]
+
+
+def strip_injection_markers(text: str) -> str:
+    """Redact known prompt-injection override markers (heuristic; see module docstring)."""
+    if not text:
+        return text
+    for pattern in INJECTION_PATTERNS:
+        text = pattern.sub("[INPUT FILTERED]", text)
+    return text
 
 
 def is_luhn_valid(number_str: str) -> bool:
@@ -93,12 +143,17 @@ def sanitize_pii_text(text: str) -> str:
     return cleaned
 
 
+def sanitize_user_input(text: str) -> str:
+    """Strip PII and known injection markers from untrusted input (best-effort, not a boundary)."""
+    return strip_injection_markers(sanitize_pii_text(text))
+
+
 class PIISanitizerProcessor(FrameProcessor):
-    """Pipeline processor that sanitizes PII from live transcriptions and text frames."""
+    """Pipeline processor that sanitizes PII and injection markers from live transcriptions and text frames."""
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, (TranscriptionFrame, InterimTranscriptionFrame, TextFrame)):
             if getattr(frame, "text", None):
-                frame.text = sanitize_pii_text(frame.text)
+                frame.text = sanitize_user_input(frame.text)
         await self.push_frame(frame, direction)

@@ -9,7 +9,7 @@ The platform ships three applications plus a local LLM daemon:
 | **backend** | FastAPI gateway + Pipecat voice pipeline (WebRTC, VAD → STT → LLM → TTS, MCP tools, RAG) | `8000` |
 | **consumer_ui** | Guest concierge portal (WebRTC voice, live captions, generative booking UI) | `3000` |
 | **admin_panel** | Operations console (tenants, personas, voice studio, knowledge base) | `5173` |
-| **ollama** | Local LLM daemon (default `llama3.2:3b`) | `11434` |
+| **ollama** | Local LLM daemon (default `llama3.2:3b`) | `11434` (container-internal) |
 
 ---
 
@@ -54,11 +54,51 @@ This starts all four services with health checks and correct wiring
 - Consumer portal → <http://localhost:3000>
 - Admin console → <http://localhost:5173> (sign in with `ADMIN_API_KEY`)
 - API gateway + Swagger docs → <http://localhost:8000/docs>
-- Ollama API → <http://localhost:11435> (bound to localhost only; configurable with `OLLAMA_HOST_PORT`)
+- Ollama API → internal only at `http://ollama:11434` (not published to the host)
 
 Stop services with `docker compose down`. This keeps stored data; avoid `-v`
 unless you intentionally want to delete the persistent model and application
 volumes.
+
+### Production HTTPS
+
+Browsers only expose the microphone (`navigator.mediaDevices.getUserMedia`) in a
+secure context. `http://localhost` qualifies; any other plain-HTTP origin does
+not, so a real deployment must serve TLS. The Compose stack ships an nginx TLS
+terminator for that:
+
+```bash
+# .env — the three public entrypoints
+TLS_CONSUMER_HOST=voice.example.com
+TLS_ADMIN_HOST=admin.example.com
+TLS_API_HOST=api.example.com
+ADMIN_CORS_ORIGINS=https://admin.example.com
+CONSUMER_CORS_ORIGINS=https://voice.example.com
+
+# PEM chain + key (Let's Encrypt, internal CA, or mkcert)
+mkdir -p certs
+cp /etc/letsencrypt/live/voice.example.com/fullchain.pem certs/
+cp /etc/letsencrypt/live/voice.example.com/privkey.pem    certs/
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+The overlay (`docker-compose.prod.yml` + `docker/nginx/tls.conf.template`):
+
+- serves 443 with TLS 1.2/1.3 and HTTP/2, sends HSTS on every response, and
+  answers port 80 with a `308` redirect (ACME challenges stay on plain HTTP);
+- exposes one origin per role — guest portal, admin console, API — so the
+  browser only ever talks TLS;
+- rebuilds both SPAs with `VITE_API_BASE_URL=https://${TLS_API_HOST}`; the value
+  is compiled in, so a hostname change needs `--build`;
+- replaces the SPA CSP `connect-src` with the HTTPS API and signalling origin;
+- restricts `TRUSTED_PROXY_IPS` to the TLS proxy's static address on a dedicated
+  `/29` network shared only with the gateway, so the per-IP signalling rate limit
+  keys on the real client while no other container can forge `X-Forwarded-For`.
+
+Ports `8000`, `3000` and `5173` are bound to the host loopback in
+`docker-compose.yml` and must not be published. For practising locally with a
+self-signed CA, see [`docs/tls-local-dev.md`](docs/tls-local-dev.md).
 
 ### Option B — Manual (local development)
 
@@ -156,11 +196,25 @@ knowledge base is ready. Scanned PDFs requiring OCR are not supported.
   300 seconds. These limits can be changed with `VOICE_OFFER_RATE_LIMIT`,
   `VOICE_OFFER_RATE_WINDOW_SECONDS`, `MAX_ACTIVE_VOICE_SESSIONS`, and
   `VOICE_SESSION_IDLE_TIMEOUT_SECONDS`.
-- Keep the API behind HTTPS when accessed over an untrusted network. The
-  included Nginx CSP allows the local API at `http://localhost:8000`; update
-  `connect-src` in both Nginx configs when hosting the API at another origin.
-- Ollama is published only on the host loopback interface in Compose. Do not
-  expose its port publicly.
+- `sanitize_user_input` (PII and prompt-injection filtering) is a best-effort
+  heuristic, **not** a security boundary. It strips known marker phrases and
+  card/SSN patterns, but paraphrased overrides and obfuscated digits can still
+  reach the model. Tool allowlists, confirmation rules and the system prompt
+  remain the enforcing controls; never grant capabilities from model output
+  alone.
+- Serve the platform over HTTPS outside localhost; browsers block microphone
+  capture on plain HTTP. Use the Compose TLS overlay described under
+  *Production HTTPS* above, and add the public origins to
+  `ADMIN_CORS_ORIGINS` / `CONSUMER_CORS_ORIGINS`.
+- When running behind a proxy, set `TRUSTED_PROXY_IPS` to the proxy's single
+  address (or a dedicated network containing only the proxy). Never use a broad
+  container range such as `172.16.0.0/12`: anything listed there may supply
+  `X-Forwarded-For`, so sibling containers could forge client IPs and evade the
+  per-IP limits. The Compose TLS overlay handles this automatically.
+- Ollama is not published to the host at all in Compose. Other containers reach
+  it at `http://ollama:11434`; there is no host port to expose. To inspect or
+  debug the daemon, use `docker compose exec ollama ollama list` instead of
+  publishing a port.
 
 | Symptom | Resolution |
 |---|---|
@@ -182,10 +236,13 @@ Copy `.env.example` → `.env`. All defaults are local-first ($0 compute):
 |---|---|---|
 | `LLM_PROVIDER` | `ollama` | `ollama` \| `gemini` \| `groq` \| `openai` |
 | `OLLAMA_MODEL` / `OLLAMA_BASE_URL` | `llama3.2:3b` / `http://localhost:11434/v1` | Local LLM endpoint |
-| `OLLAMA_HOST_PORT` | `11435` | Host port for the Compose Ollama API; change if this port is already in use |
 | `STT_PROVIDER` | `faster_whisper` | Speech-to-text backend |
 | `TTS_PROVIDER` | `kokoro` | Text-to-speech backend |
 | `ADMIN_API_KEY` | *(unset; required for admin access)* | Secret bearer key used by the Admin Console |
+| `ADMIN_CORS_ORIGINS` / `CONSUMER_CORS_ORIGINS` | localhost origins | Exact browser origins allowed to call the gateway |
+| `TRUSTED_PROXY_IPS` | *(empty)* | IPs/CIDRs allowed to supply `X-Forwarded-For` for rate limiting |
+| `TLS_CONSUMER_HOST` / `TLS_ADMIN_HOST` / `TLS_API_HOST` | example hostnames | Public hostnames served by the TLS overlay |
+| `TLS_CERT_FILE` / `TLS_KEY_FILE` | `/etc/nginx/certs/*.pem` | Certificate chain and key paths inside the proxy container |
 | `FASTER_WHISPER_MODEL` | `base.en` | Whisper model size |
 | `KOKORO_VOICE_ID` / `KOKORO_SPEED` | `af_sarah` / `1.00` | Voice profile |
 | `DATABASE_URL` | `sqlite:///./data/voice_agent.db` | SQLite persistence |

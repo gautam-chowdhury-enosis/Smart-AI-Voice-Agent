@@ -26,8 +26,16 @@ def create_app() -> FastAPI:
     )
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):
+    async def lifespan(app_instance: FastAPI):
         """Release live WebRTC peer connections cleanly on gateway shutdown."""
+        active_settings = app_instance.dependency_overrides.get(get_settings, get_settings)()
+        if active_settings.environment == "production" and not active_settings.db_encryption_key:
+            import logging
+
+            logging.getLogger("omnivox.security").warning(
+                "Production environment running without DB_ENCRYPTION_KEY configured. "
+                "Ensure host/volume-level storage encryption (LUKS / encrypted EBS) is enabled for persistent storage."
+            )
         yield
         await get_voice_session_manager().close()
 

@@ -104,6 +104,12 @@ export function useVoiceSession({ tenantId, persona, onServerEvent }: UseVoiceSe
       teardownTransport();
     }
     setErrorMessage(null);
+    const captureBlocker = voiceCaptureBlocker();
+    if (captureBlocker) {
+      setStatus('error');
+      setErrorMessage(captureBlocker);
+      return;
+    }
     setStatus('requesting-permission');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -263,9 +269,28 @@ function safelyParseJson(value: unknown): unknown {
   }
 }
 
+function voiceCaptureBlocker(): string | null {
+  if (typeof window === 'undefined') return null;
+  // Browsers expose no mediaDevices object at all on an insecure origin, so the
+  // failure surfaces as an unexplained TypeError from getUserMedia.
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return 'This browser cannot capture audio. Voice requires HTTPS or localhost.';
+  }
+  const { hostname } = window.location;
+  const loopback =
+    hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+  if (!window.isSecureContext && !loopback) {
+    return 'Voice needs a secure connection. Open this portal over HTTPS — browsers block microphone access on plain HTTP.';
+  }
+  return null;
+}
+
 function toConnectionMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === 'NotAllowedError') {
     return 'Microphone access is required to start a private voice conversation.';
+  }
+  if (error instanceof TypeError) {
+    return 'Voice needs a secure connection. Open this portal over HTTPS and try again.';
   }
   if (error instanceof Error && error.name === 'AbortError') {
     return 'The secure voice connection timed out. Please try again.';

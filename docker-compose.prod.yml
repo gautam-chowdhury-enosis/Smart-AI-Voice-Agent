@@ -1,0 +1,90 @@
+# ==============================================================================
+# Smart AI Voice Agent — production HTTPS overlay (SEC-09)
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# This overlay adds an nginx TLS terminator in front of the gateway and both
+# SPAs, and rebuilds the UIs so their bundles call https://${TLS_API_HOST}
+# instead of http://localhost:8000 (VITE_API_BASE_URL is compiled in at build
+# time, so a rebuild is required whenever the public API hostname changes).
+#
+# Ports 8000/3000/5173 stay bound to the host loopback by docker-compose.yml;
+# only 80 and 443 are publicly reachable in this configuration.
+# ==============================================================================
+
+services:
+
+  backend:
+    environment:
+      # Only the TLS proxy may supply X-Forwarded-For: this is its address on the
+      # dedicated proxy_trust network, which no other container joins. Never widen
+      # this to a shared range — any listed address could forge client IPs and
+      # evade per-IP limits.
+      TRUSTED_PROXY_IPS: ${TLS_PROXY_TRUST_IP:-172.28.250.2}
+    networks:
+      default:
+      proxy_trust:
+        ipv4_address: ${BACKEND_PROXY_TRUST_IP:-172.28.250.3}
+
+  consumer_ui:
+    build:
+      args:
+        VITE_API_BASE_URL: https://${TLS_API_HOST:?set TLS_API_HOST in .env}
+
+  admin_ui:
+    build:
+      args:
+        VITE_API_BASE_URL: https://${TLS_API_HOST:?set TLS_API_HOST in .env}
+
+  tls:
+    image: nginx:1.27-alpine
+    container_name: smart-voice-tls
+    restart: unless-stopped
+    networks:
+      # default reaches the SPAs; proxy_trust carries the pinned API upstream.
+      default:
+      proxy_trust:
+        ipv4_address: ${TLS_PROXY_TRUST_IP:-172.28.250.2}
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TLS_CONSUMER_HOST: ${TLS_CONSUMER_HOST:?set TLS_CONSUMER_HOST in .env}
+      TLS_ADMIN_HOST: ${TLS_ADMIN_HOST:?set TLS_ADMIN_HOST in .env}
+      TLS_API_HOST: ${TLS_API_HOST:?set TLS_API_HOST in .env}
+      # Pinned upstream: the `backend` DNS name also resolves on the default
+      # network, where the gateway would not trust this proxy's X-Forwarded-For.
+      BACKEND_PROXY_TRUST_IP: ${BACKEND_PROXY_TRUST_IP:-172.28.250.3}
+      TLS_CERT_FILE: ${TLS_CERT_FILE:-/etc/nginx/certs/fullchain.pem}
+      TLS_KEY_FILE: ${TLS_KEY_FILE:-/etc/nginx/certs/privkey.pem}
+    volumes:
+      # The official image runs envsubst over /etc/nginx/templates.
+      - ./docker/nginx/tls.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/nginx/snippets:/etc/nginx/snippets:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./certbot-webroot:/var/www/certbot:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      consumer_ui:
+        condition: service_healthy
+      admin_ui:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+# ── Dedicated proxy-trust network ─────────────────────────────────────────────
+# A /29 for exactly the TLS proxy and the gateway: no other container can join and
+# forge X-Forwarded-For. Static addresses let TRUSTED_PROXY_IPS name the proxy
+# alone instead of a subnet.
+networks:
+  proxy_trust:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${PROXY_TRUST_SUBNET:-172.28.250.0/29}

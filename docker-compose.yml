@@ -24,8 +24,12 @@ services:
     image: ollama/ollama:latest
     container_name: smart-voice-ollama
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:${OLLAMA_HOST_PORT:-11435}:11434"
+    # Intentionally NOT published to the host. Ollama is reachable only from
+    # other services on this Compose network (backend uses http://ollama:11434).
+    # `expose` is documentation only — omitting `ports:` is what keeps the
+    # daemon off the host. For debugging use `docker compose exec ollama ...`.
+    expose:
+      - "11434"
     volumes:
       - ollama_models:/root/.ollama
     # Pull the default model on first start.
@@ -62,7 +66,10 @@ services:
     container_name: smart-voice-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Loopback only: public traffic must arrive through the TLS proxy
+      # (docker-compose.prod.yml). Use `docker compose port backend 8000` to
+      # discover the host port when it differs.
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -98,7 +105,7 @@ services:
     container_name: smart-voice-consumer
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -120,7 +127,7 @@ services:
     container_name: smart-voice-admin
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     depends_on:
       backend:
         condition: service_healthy
