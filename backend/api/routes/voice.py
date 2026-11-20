@@ -26,7 +26,12 @@ TrustedNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 @lru_cache(maxsize=8)
 def parse_trusted_proxy_networks(value: str) -> tuple[TrustedNetwork, ...]:
-    """Parse TRUSTED_PROXY_IPS into networks, skipping entries that are not CIDRs."""
+    """Parse TRUSTED_PROXY_IPS into networks, skipping entries that are not CIDRs.
+
+    Keep this narrow: every listed address may choose the rate-limit identity of a
+    request, so a shared container range such as 172.16.0.0/12 lets siblings forge
+    X-Forwarded-For and evade per-IP limits.
+    """
     networks: list[TrustedNetwork] = []
     for entry in value.split(","):
         candidate = entry.strip()

@@ -120,24 +120,26 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 
+    # Pinned to the backend's proxy_trust address: `backend` also resolves on the
+    # shared default network, where the gateway would not trust our X-Forwarded-For.
     location /api/ {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_PROXY_TRUST_IP}:8000;
     }
 
     location = /health {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_PROXY_TRUST_IP}:8000;
     }
 
     location = /openapi.json {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_PROXY_TRUST_IP}:8000;
     }
 
     location = /docs {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_PROXY_TRUST_IP}:8000;
     }
 
     location = /redoc {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_PROXY_TRUST_IP}:8000;
     }
 
     location / {

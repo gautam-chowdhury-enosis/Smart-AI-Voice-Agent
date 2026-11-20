@@ -92,8 +92,9 @@ The overlay (`docker-compose.prod.yml` + `docker/nginx/tls.conf.template`):
 - rebuilds both SPAs with `VITE_API_BASE_URL=https://${TLS_API_HOST}`; the value
   is compiled in, so a hostname change needs `--build`;
 - replaces the SPA CSP `connect-src` with the HTTPS API and signalling origin;
-- sets `TRUSTED_PROXY_IPS` so the per-IP signalling rate limit keys on the real
-  client instead of the proxy.
+- restricts `TRUSTED_PROXY_IPS` to the TLS proxy's static address on a dedicated
+  `/29` network shared only with the gateway, so the per-IP signalling rate limit
+  keys on the real client while no other container can forge `X-Forwarded-For`.
 
 Ports `8000`, `3000` and `5173` are bound to the host loopback in
 `docker-compose.yml` and must not be published. For practising locally with a
@@ -195,13 +196,21 @@ knowledge base is ready. Scanned PDFs requiring OCR are not supported.
   300 seconds. These limits can be changed with `VOICE_OFFER_RATE_LIMIT`,
   `VOICE_OFFER_RATE_WINDOW_SECONDS`, `MAX_ACTIVE_VOICE_SESSIONS`, and
   `VOICE_SESSION_IDLE_TIMEOUT_SECONDS`.
+- `sanitize_user_input` (PII and prompt-injection filtering) is a best-effort
+  heuristic, **not** a security boundary. It strips known marker phrases and
+  card/SSN patterns, but paraphrased overrides and obfuscated digits can still
+  reach the model. Tool allowlists, confirmation rules and the system prompt
+  remain the enforcing controls; never grant capabilities from model output
+  alone.
 - Serve the platform over HTTPS outside localhost; browsers block microphone
   capture on plain HTTP. Use the Compose TLS overlay described under
   *Production HTTPS* above, and add the public origins to
   `ADMIN_CORS_ORIGINS` / `CONSUMER_CORS_ORIGINS`.
-- When running behind a proxy, set `TRUSTED_PROXY_IPS` to its address or CIDR.
-  `X-Forwarded-For` is ignored for rate limiting unless the direct peer matches,
-  so an untrusted client cannot choose another client's bucket.
+- When running behind a proxy, set `TRUSTED_PROXY_IPS` to the proxy's single
+  address (or a dedicated network containing only the proxy). Never use a broad
+  container range such as `172.16.0.0/12`: anything listed there may supply
+  `X-Forwarded-For`, so sibling containers could forge client IPs and evade the
+  per-IP limits. The Compose TLS overlay handles this automatically.
 - Ollama is not published to the host at all in Compose. Other containers reach
   it at `http://ollama:11434`; there is no host port to expose. To inspect or
   debug the daemon, use `docker compose exec ollama ollama list` instead of

@@ -49,7 +49,9 @@ TLS_API_HOST=api.localhost
 ADMIN_CORS_ORIGINS=https://admin.localhost
 CONSUMER_CORS_ORIGINS=https://voice.localhost
 
-TRUSTED_PROXY_IPS=172.16.0.0/12
+# Leave TRUSTED_PROXY_IPS unset: the overlay trusts the TLS proxy's static
+# address on its dedicated network. Outside Compose, set that one address — never
+# a shared container range such as 172.16.0.0/12.
 ```
 
 `VITE_API_BASE_URL` is compiled into the UI bundles at build time, so the UIs
@@ -86,9 +88,10 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.localhost/api/v1/v
 # Repeat 5 times: the 6th returns 429 for that forwarded address only.
 ```
 
-If every request shares one bucket, `TRUSTED_PROXY_IPS` is missing or does not
-cover the proxy address — the gateway deliberately ignores `X-Forwarded-For`
-from untrusted peers.
+If every request shares one bucket, the gateway is not receiving the proxy's
+trusted address (it ignores `X-Forwarded-For` from untrusted peers). Set
+`TLS_PROXY_TRUST_IP` to the proxy's actual address inside `PROXY_TRUST_SUBNET`;
+never widen the range to fix it.
 
 ---
 

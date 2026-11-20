@@ -14,6 +14,11 @@ The Smart AI Voice Agent supports two operational tiers for encryption at rest:
 2. **SQLCipher Application-Level Encryption**:
    * Uses 256-bit AES page encryption directly within the SQLite file for `voice_agent.db`.
    * Activated when `DB_ENCRYPTION_KEY` is supplied and `sqlcipher3` is installed.
+   * `Dockerfile.backend` installs `sqlcipher3` (statically linked wheels) and fails
+     the build if `PRAGMA cipher_version` fails, so the standard image supports
+     `DB_ENCRYPTION_KEY`. A custom image without the driver raises
+     `DatabaseEncryptionError` at startup instead of running in plaintext; install
+     `sqlcipher3` there, or use volume-level encryption.
 
 ---
 

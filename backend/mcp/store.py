@@ -10,6 +10,10 @@ from typing import Any, Generator
 from uuid import uuid4
 
 try:
+    # The official Docker image (Dockerfile.backend) installs this driver, so a
+    # DB_ENCRYPTION_KEY there enables encryption instead of failing at startup.
+    # Custom images must install sqlcipher3 themselves or rely on volume-level
+    # encryption.
     import sqlcipher3 as sqlite_driver  # type: ignore[import-untyped]
     HAS_SQLCIPHER = True
 except ImportError:
@@ -77,7 +81,7 @@ class HotelStore:
                 connection.close()
                 raise DatabaseEncryptionError(
                     "DB_ENCRYPTION_KEY was specified, but neither sqlcipher3 nor an active SQLCipher backend is available. "
-                    "Install sqlcipher3 or configure volume-level storage encryption."
+                    "Install sqlcipher3 (the standard Docker image includes it) or configure volume-level storage encryption."
                 )
 
         connection.execute("PRAGMA foreign_keys = ON")
