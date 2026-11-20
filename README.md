@@ -9,7 +9,7 @@ The platform ships three applications plus a local LLM daemon:
 | **backend** | FastAPI gateway + Pipecat voice pipeline (WebRTC, VAD → STT → LLM → TTS, MCP tools, RAG) | `8000` |
 | **consumer_ui** | Guest concierge portal (WebRTC voice, live captions, generative booking UI) | `3000` |
 | **admin_panel** | Operations console (tenants, personas, voice studio, knowledge base) | `5173` |
-| **ollama** | Local LLM daemon (default `llama3.2:3b`) | `11434` |
+| **ollama** | Local LLM daemon (default `llama3.2:3b`) | `11434` (container-internal) |
 
 ---
 
@@ -54,7 +54,7 @@ This starts all four services with health checks and correct wiring
 - Consumer portal → <http://localhost:3000>
 - Admin console → <http://localhost:5173> (sign in with `ADMIN_API_KEY`)
 - API gateway + Swagger docs → <http://localhost:8000/docs>
-- Ollama API → <http://localhost:11435> (bound to localhost only; configurable with `OLLAMA_HOST_PORT`)
+- Ollama API → internal only at `http://ollama:11434` (not published to the host)
 
 Stop services with `docker compose down`. This keeps stored data; avoid `-v`
 unless you intentionally want to delete the persistent model and application
@@ -202,8 +202,10 @@ knowledge base is ready. Scanned PDFs requiring OCR are not supported.
 - When running behind a proxy, set `TRUSTED_PROXY_IPS` to its address or CIDR.
   `X-Forwarded-For` is ignored for rate limiting unless the direct peer matches,
   so an untrusted client cannot choose another client's bucket.
-- Ollama is published only on the host loopback interface in Compose. Do not
-  expose its port publicly.
+- Ollama is not published to the host at all in Compose. Other containers reach
+  it at `http://ollama:11434`; there is no host port to expose. To inspect or
+  debug the daemon, use `docker compose exec ollama ollama list` instead of
+  publishing a port.
 
 | Symptom | Resolution |
 |---|---|
@@ -225,7 +227,6 @@ Copy `.env.example` → `.env`. All defaults are local-first ($0 compute):
 |---|---|---|
 | `LLM_PROVIDER` | `ollama` | `ollama` \| `gemini` \| `groq` \| `openai` |
 | `OLLAMA_MODEL` / `OLLAMA_BASE_URL` | `llama3.2:3b` / `http://localhost:11434/v1` | Local LLM endpoint |
-| `OLLAMA_HOST_PORT` | `11435` | Host port for the Compose Ollama API; change if this port is already in use |
 | `STT_PROVIDER` | `faster_whisper` | Speech-to-text backend |
 | `TTS_PROVIDER` | `kokoro` | Text-to-speech backend |
 | `ADMIN_API_KEY` | *(unset; required for admin access)* | Secret bearer key used by the Admin Console |

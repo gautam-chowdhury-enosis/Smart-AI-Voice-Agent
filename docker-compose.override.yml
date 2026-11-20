@@ -32,8 +32,9 @@ services:
     environment:
       DEBUG: "true"
       LOG_LEVEL: DEBUG
-    # In dev, allow backend to start without waiting for Ollama health
-    # (useful when Ollama is already running on the host, not in Docker)
+    # In dev, allow backend to start without waiting for Ollama health so
+    # live-reload restarts are fast. The Ollama port stays unpublished; pick the
+    # service up in-process with `docker compose exec ollama ...` when debugging.
     depends_on:
       ollama:
         condition: service_started
