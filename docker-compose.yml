@@ -62,7 +62,10 @@ services:
     container_name: smart-voice-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Loopback only: public traffic must arrive through the TLS proxy
+      # (docker-compose.prod.yml). Use `docker compose port backend 8000` to
+      # discover the host port when it differs.
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -98,7 +101,7 @@ services:
     container_name: smart-voice-consumer
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -120,7 +123,7 @@ services:
     container_name: smart-voice-admin
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     depends_on:
       backend:
         condition: service_healthy

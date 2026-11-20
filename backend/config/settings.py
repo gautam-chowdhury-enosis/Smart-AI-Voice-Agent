@@ -119,6 +119,10 @@ class AppSettings(BaseSettings):
     admin_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     consumer_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Trusted reverse proxy hops (SEC-09). Comma-separated IPs/CIDRs whose
+    # X-Forwarded-For header may be believed; empty means never trust it.
+    trusted_proxy_ips: str = ""
+
     # Security & Rate Limiting Controls (Phase 8A)
     admin_api_key: str | None = None
     voice_offer_rate_limit: int = 5

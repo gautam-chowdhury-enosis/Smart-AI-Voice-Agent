@@ -6,6 +6,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
@@ -15,6 +16,7 @@ from pipecat.processors.frame_processor import FrameDirection
 
 from backend.api.app import create_app
 from backend.api.knowledge import KnowledgeHubService
+from backend.api.routes.voice import resolve_client_ip
 from backend.api.schemas import VoiceOfferRequest, VoiceOfferResponse
 from backend.api.voice_sessions import ConsumerVoiceSession, ConsumerVoiceSessionManager
 from backend.config.settings import AppSettings, get_settings
@@ -210,8 +212,57 @@ class TestVoiceSignallingRateLimit(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(manager._pending_offer_reservations)
 
 
+class StubRequest:
+    """Minimal Request double for client-address resolution tests."""
+
+    def __init__(self, peer: str | None, forwarded: str | None = None) -> None:
+        self.client = SimpleNamespace(host=peer) if peer is not None else None
+        self.headers = {"x-forwarded-for": forwarded} if forwarded else {}
+
+
 class TestVoiceClientAddress(unittest.TestCase):
     """Forwarded headers from clients must not control rate-limit identity."""
+
+    def test_trusted_proxy_forwarded_header_is_used(self) -> None:
+        """A request arriving from a configured proxy uses the forwarded client IP."""
+        settings = AppSettings(trusted_proxy_ips="172.16.0.0/12")
+        request = StubRequest("172.18.0.2", "203.0.113.7")
+        self.assertEqual(resolve_client_ip(request, settings), "203.0.113.7")
+
+    def test_untrusted_peer_cannot_spoof_forwarded_header(self) -> None:
+        """A direct client outside the trusted ranges keeps its peer address."""
+        settings = AppSettings(trusted_proxy_ips="172.16.0.0/12")
+        request = StubRequest("198.51.100.9", "203.0.113.7")
+        self.assertEqual(resolve_client_ip(request, settings), "198.51.100.9")
+
+    def test_forwarded_header_defaults_to_empty(self) -> None:
+        """Without TRUSTED_PROXY_IPS the forwarded header is never believed."""
+        settings = AppSettings()
+        self.assertEqual(settings.trusted_proxy_ips, "")
+        request = StubRequest("172.18.0.2", "203.0.113.7")
+        self.assertEqual(resolve_client_ip(request, settings), "172.18.0.2")
+
+    def test_forged_hops_are_skipped_to_the_real_client(self) -> None:
+        """Walking right to left stops at the first untrusted hop."""
+        settings = AppSettings(trusted_proxy_ips="172.16.0.0/12")
+        request = StubRequest("172.18.0.2", "198.51.100.9, 203.0.113.7")
+        self.assertEqual(resolve_client_ip(request, settings), "203.0.113.7")
+
+    def test_invalid_trusted_proxy_entries_are_ignored(self) -> None:
+        """A malformed CIDR disables trust instead of matching every address."""
+        settings = AppSettings(trusted_proxy_ips="not-a-cidr")
+        request = StubRequest("172.18.0.2", "203.0.113.7")
+        self.assertEqual(resolve_client_ip(request, settings), "172.18.0.2")
+
+    def test_missing_forwarded_header_falls_back_to_peer(self) -> None:
+        """A trusted proxy that sends no header yields the proxy address."""
+        settings = AppSettings(trusted_proxy_ips="172.16.0.0/12")
+        self.assertEqual(resolve_client_ip(StubRequest("172.18.0.2"), settings), "172.18.0.2")
+
+    def test_missing_peer_address_is_unknown(self) -> None:
+        """A transport without a client address does not crash."""
+        settings = AppSettings(trusted_proxy_ips="172.16.0.0/12")
+        self.assertEqual(resolve_client_ip(StubRequest(None), settings), "unknown")
 
     def test_offer_rate_limit_uses_peer_address_not_forwarded_header(self) -> None:
         class RecordingManager:
