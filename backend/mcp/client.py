@@ -150,13 +150,15 @@ def create_mcp_hub(
     session: AgentSession | None = None,
     db_path: str | None = None,
     weather_provider: str | None = None,
+    encryption_key: str | None = None,
 ) -> MCPHub:
     """Build an MCP hub from application settings (local-first defaults)."""
     from backend.config.settings import get_settings
 
     settings = get_settings()
     resolved_path = db_path or str(resolve_sqlite_path(settings.database_url))
-    store = HotelStore(resolved_path)
+    active_key = encryption_key if encryption_key is not None else settings.db_encryption_key
+    store = HotelStore(resolved_path, encryption_key=active_key)
     provider = (weather_provider or settings.weather_provider).lower().strip()
     fetcher = fetch_open_meteo_forecast if provider == "open_meteo" else local_weather_stub
     return MCPHub(

@@ -126,9 +126,10 @@ class AppSettings(BaseSettings):
     max_active_voice_sessions: int = 10
     voice_session_idle_timeout_seconds: int = 300
 
-    # Storage Paths
+    # Storage Paths & Encryption Controls (SEC-10)
     database_url: str = "sqlite:///./data/voice_agent.db"
     chroma_persist_dir: str = "./data/chroma_db"
+    db_encryption_key: str | None = None
     log_level: str = "INFO"
 
     # RAG Embeddings (local-first; nomic/fastembed are opt-in)

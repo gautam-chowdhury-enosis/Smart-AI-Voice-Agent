@@ -28,6 +28,7 @@ from backend.engine.audio.pii_sanitizer import (
 from backend.engine.pipeline import ConsumerVoicePipeline
 from backend.mcp.confirmation import user_confirms
 from backend.mcp.session import AgentSession, redact_sensitive_audit_args
+from backend.mcp.store import DatabaseEncryptionError, HotelStore
 from backend.rag.chunker import DocumentChunk
 from backend.rag.retriever import RAGContextRetriever
 
@@ -605,6 +606,105 @@ class TestPromptInjectionFilter(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg["role"], "developer")
         self.assertIn("[INPUT FILTERED]", msg["content"])
         self.assertNotIn("[developer]", msg["content"])
+
+
+class TestDatabaseEncryptionAtRest(unittest.TestCase):
+    """SEC-10: SQLite storage at rest encryption and SQLCipher evaluation."""
+
+    def test_settings_supports_db_encryption_key(self) -> None:
+        """AppSettings validates and stores db_encryption_key."""
+        settings = AppSettings(db_encryption_key="cipher-secret-key")
+        self.assertEqual(settings.db_encryption_key, "cipher-secret-key")
+
+    def test_startup_warns_in_production_without_encryption_key(self) -> None:
+        """Gateway startup logs a security warning if production lacks DB_ENCRYPTION_KEY."""
+        prod_settings = AppSettings(environment="production", db_encryption_key=None)
+        app = create_app()
+        app.dependency_overrides[get_settings] = lambda: prod_settings
+
+        with self.assertLogs("omnivox.security", level="WARNING") as captured_logs:
+            with TestClient(app) as client:
+                res = client.get("/health")
+                self.assertEqual(res.status_code, 200)
+
+        self.assertTrue(
+            any("DB_ENCRYPTION_KEY" in log and "production" in log.lower() for log in captured_logs.output)
+        )
+
+    def test_startup_no_warning_when_encryption_key_configured(self) -> None:
+        """Gateway startup does not emit encryption warning when DB_ENCRYPTION_KEY is present."""
+        import logging
+
+        prod_settings = AppSettings(
+            environment="production",
+            db_encryption_key="production-passphrase",
+            admin_api_key="valid-key",
+        )
+        app = create_app()
+        app.dependency_overrides[get_settings] = lambda: prod_settings
+
+        captured_records = []
+        handler = logging.Handler()
+        handler.emit = lambda record: captured_records.append(record)
+        sec_logger = logging.getLogger("omnivox.security")
+        sec_logger.addHandler(handler)
+        try:
+            with TestClient(app) as client:
+                res = client.get("/health")
+                self.assertEqual(res.status_code, 200)
+            self.assertFalse(
+                any("DB_ENCRYPTION_KEY" in record.getMessage() for record in captured_records)
+            )
+        finally:
+            sec_logger.removeHandler(handler)
+
+    def test_hotel_store_without_encryption_key_operates_normally(self) -> None:
+        """HotelStore operates standard unencrypted SQLite when no key is supplied."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "test_unencrypted.db"
+            store = HotelStore(db_path, encryption_key=None)
+            room = store.get_room("R-101", "grand-meridian")
+            self.assertIsNotNone(room)
+            self.assertEqual(room["category"], "standard")
+
+    def test_hotel_store_with_key_raises_when_cipher_unavailable(self) -> None:
+        """HotelStore raises DatabaseEncryptionError when encryption is requested but cipher is missing."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "test_encrypted.db"
+            with self.assertRaises(DatabaseEncryptionError) as ctx:
+                HotelStore(db_path, encryption_key="my-secret-key")
+            self.assertIn("DB_ENCRYPTION_KEY was specified", str(ctx.exception))
+
+    def test_hotel_store_with_mocked_sqlcipher_succeeds(self) -> None:
+        """HotelStore executes PRAGMA key and verifies cipher_version when SQLCipher backend is present."""
+        executed_statements = []
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [("4.5.4",)]
+        mock_conn.execute.side_effect = lambda sql, *args, **kwargs: (
+            executed_statements.append(sql) or (
+                mock_cursor if "PRAGMA cipher_version" in sql else MagicMock()
+            )
+        )
+        mock_conn.executemany = MagicMock()
+        mock_conn.executescript = MagicMock()
+
+        # Mock row count for schema init
+        count_cursor = MagicMock()
+        count_cursor.fetchone.return_value = {"n": 3}
+        mock_conn.execute.side_effect = lambda sql, *args, **kwargs: (
+            executed_statements.append(sql) or (
+                mock_cursor if "PRAGMA cipher_version" in sql
+                else count_cursor if "SELECT COUNT(*)" in sql
+                else MagicMock()
+            )
+        )
+
+        with patch("backend.mcp.store.sqlite_driver.connect", return_value=mock_conn):
+            store = HotelStore(":memory:", encryption_key="pass'phrase")
+            self.assertTrue(any("PRAGMA key = 'pass''phrase'" in s for s in executed_statements))
+            self.assertTrue(any("PRAGMA cipher_version" in s for s in executed_statements))
 
 
 if __name__ == "__main__":
